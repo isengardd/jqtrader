@@ -14,7 +14,7 @@ class TraderParam:
 
     # 交易参数
     self.KLINE_FREQUENCY = "1d"
-    self.KLINE_LENGTH = 60       # 月K线， 最多取 60个月数据
+    self.KLINE_LENGTH = 60       # 月K线数量， 最多取 60个月数据
     self.ROOM_MAX = 10
     self.BUY_INTERVAL_DAY = 7
     self.SELL_INTERVAL_DAY = 3
@@ -60,11 +60,12 @@ class CalcCommon:
 
   def GetEMA(self, valueList, N):
     if len(valueList) == 0:
+      log.info("error: GetEMA: N = {N}, but valueList is empty".format(N))
       return float(0)
-    minLen = self.GetEMA_K(N)
-    if len(valueList) < minLen:
-      log.info("GetEMA: N = {0}, minLen = {1}, len(val) = {2}".format(N, minLen, len(valueList)))
-      return float(0)
+    # minLen = self.GetEMA_K(N)
+    # if len(valueList) < minLen:
+    #   log.info("GetEMA: N = {0}, minLen = {1}, len(val) = {2}".format(N, minLen, len(valueList)))
+    #   return float(0)
 
     emaFactorList = self.GetEMAFactorList(N)
     if len(emaFactorList) == 0:
@@ -73,7 +74,8 @@ class CalcCommon:
     alpha = self.GetAlpha(N)
     ema = float(0)
     for i in range(len(emaFactorList)):
-      ema += (float(valueList[i]) * emaFactorList[i])
+      val = float(valueList[i]) if len(valueList) > i else 0
+      ema += (float(val) * emaFactorList[i])
 
     ema = ema*alpha
     return ema
@@ -616,7 +618,7 @@ def before_trading_start(context):
     # 初始化 rsi 和 kdj 数据
     calcRSI = CalcRSI()
     calcKDJ = CalcKDJ()
-    CalcMACD = CalcMACD()
+    calcMACD = CalcMACD()
     # 初始化全局参数
     g.MAX_ROOM = gParam.ROOM_MAX
     try:
@@ -658,7 +660,7 @@ def before_trading_start(context):
         pre_date = (context.current_dt - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
         klineList = get_price(
             security=stock,
-            count=gParam.KLINE_LENGTH * 30,
+            count=gParam.KLINE_LENGTH * 30, # 这里是天数
             #end_date=datetime.datetime.now().strftime("%Y-%m-%d"),
             end_date=pre_date,
             frequency=gParam.KLINE_FREQUENCY,
@@ -737,7 +739,7 @@ def before_trading_start(context):
         preKDJ_1 = calcKDJ.GetKDJ(stockData.klines[1:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
         stockData.curRSI = stockData.preRSI
         stockData.curKDJ = stockData.preKDJ
-        curMacdDiff = CalcMACD.GetDiff(stockData.klines)
+        curMacdDiff = calcMACD.GetDiff(stockData.klines)
         k_open = stockData.klines[0].open if len(stockData.klines) > 0 else 0
         k_close = stockData.klines[0].close if len(stockData.klines) > 0 else 0
         preDayOpen = klineList['open'][len(rowIndexList) - 1] if len(rowIndexList) > 0 else 0
