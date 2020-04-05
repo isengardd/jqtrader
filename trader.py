@@ -287,10 +287,20 @@ class TradeManager:   # 交易管理
                 diff_3 = preKDJ_2 - preKDJ_3
                 diff_2 = preKDJ_1 - preKDJ_2
                 diff_1 = stockData.curKDJ - preKDJ_1
-                if stockData.curKDJ < 70.00 and stockData.publishDays >= 24 * 19 and \
-                ((diff_1 >= 0.5 and diff_2 < 0 and diff_3 < 0) \
-                or (diff_1 + diff_2 >= 0.5 and diff_2 > 0 and diff_2 < 0.5 and diff_3 < 0 and diff_4 < 0) \
-                or (diff_4 > 0 and diff_3 > 0 and diff_2 < 0 and diff_1 > 0.5)):
+
+                if stockData.curKDJ < 70.00 and stockData.publishDays >= 24 * 19:
+                  buyReason = 0
+                  buyMsg = ""
+                  if diff_1 >= 0.5 and diff_2 < 0 and diff_3 < 0:
+                    buyReason = 1
+                    buyMsg = "diff_1 >= 0.5 and diff_2 < 0 and diff_3 < 0"
+                  elif diff_1 + diff_2 >= 0.5 and diff_2 > 0 and diff_2 < 0.5 and diff_3 < 0 and diff_4 < 0:
+                    buyReason = 2
+                    buyMsg = "diff_1 + diff_2 >= 0.5 and diff_2 > 0 and diff_2 < 0.5 and diff_3 < 0 and diff_4 < 0"
+                  elif diff_4 > 0 and diff_3 > 0 and diff_2 < 0 and diff_1 > 0.5:
+                    buyReason = 3
+                    buyMsg = "diff_4 > 0 and diff_3 > 0 and diff_2 < 0 and diff_1 > 0.5"
+                  if buyReason > 0:
                     # 符合买入条件，进入交易席位
                     newRoom = TradeRoom()
                     newRoom.id = stockData.id
@@ -301,8 +311,9 @@ class TradeManager:   # 交易管理
                     newRoom.tradeProcess.procesStart = GetDayTimeStamp(context.current_dt, 0)
                     newRoom.tradeProcess.stepStart = GetDayTimeStamp(context.current_dt, 0)
                     self.rooms.append(newRoom)
-                    log.info("enter room, stockid={0}, preKDJ={1}, curKDJ={2}, lockCash={3}".format(stockData.id, preKDJ_1, stockData.curKDJ, roomCash))
-                    log.info("diff4={0}, diff3={1}, diff2={2}, diff1={3}".format(diff_4,diff_3, diff_2, diff_1))
+                    log.info("enter room, stockid={stockid}, preKDJ={preKDJ}, curKDJ={curKDJ}, lockCash={lockCash}".format(stockid = stockData.id, preKDJ = preKDJ_1, curKDJ = stockData.curKDJ, lockCash = roomCash))
+                    log.info("buyReason: {buyReason}, buyMsg = {buyMsg}".format(buyReason = buyReason, buyMsg = buyMsg))
+                    log.info("diff4={diff_4}, diff3={diff_3}, diff2={diff_2}, diff1={diff_1}".format(diff_4 = diff_4, diff_3 = diff_3, diff_2 = diff_2, diff_1 = diff_1))
                     if len(self.rooms) < g.MAX_ROOM:
                         continue
                     else:
@@ -464,12 +475,27 @@ class TradeRoom:    #交易席位
             diff_3 = preKDJ_2 - preKDJ_3
             diff_2 = preKDJ_1 - preKDJ_2
             diff_1 = stockData.curKDJ - preKDJ_1
-            if diff_1 < -2 or \
-            (diff_1 < 0 and diff_2 < 0 and (diff_1 + diff_2 < -2)) or \
-            (diff_1 < 0 and diff_2 < 0 and diff_3 < 0 and (diff_1 + diff_2 + diff_3 < -2)) or \
-            (diff_1 < 0 and diff_2 < 0 and diff_3 < 0 and diff_4 < 0 and (diff_1 + diff_2 + diff_3 + diff_4 < -2)):
-                self.tradeProcess.changeType(context, gParam.PROCESS_SELL)
-                log.info("change to sell, stockid={0}, preKDJ={1}, curKDJ={2}".format(self.id, preKDJ_1, stockData.curKDJ))
+
+            sellReason = 0
+            sellMsg = ""
+            if diff_1 < -2:
+              sellReason = 1
+              sellMsg = "diff_1 < -2"
+            elif diff_1 < 0 and diff_2 < 0 and (diff_1 + diff_2 < -2):
+              sellReason = 2
+              sellMsg = "diff_1 < 0 and diff_2 < 0 and (diff_1 + diff_2 < -2)"
+            elif diff_1 < 0 and diff_2 < 0 and diff_3 < 0 and (diff_1 + diff_2 + diff_3 < -2):
+              sellReason = 3
+              sellMsg = "diff_1 < 0 and diff_2 < 0 and diff_3 < 0 and (diff_1 + diff_2 + diff_3 < -2)"
+            elif diff_1 < 0 and diff_2 < 0 and diff_3 < 0 and diff_4 < 0 and (diff_1 + diff_2 + diff_3 + diff_4 < -2):
+              sellReason = 4
+              sellMsg = "diff_1 < 0 and diff_2 < 0 and diff_3 < 0 and diff_4 < 0 and (diff_1 + diff_2 + diff_3 + diff_4 < -2)"
+
+            if sellReason > 0:
+              self.tradeProcess.changeType(context, gParam.PROCESS_SELL)
+              log.info("change to sell, stockid={stockid}, preKDJ={preKDJ}, curKDJ={curKDJ}".format(stockid = self.id, preKDJ = preKDJ_1, curKDJ = stockData.curKDJ))
+              log.info("sellReason: {sellReason}, Msg = {sellMsg}".format(sellReason = sellReason, sellMsg = sellMsg))
+              log.info("diff4={diff_4}, diff3={diff_3}, diff2={diff_2}, diff1={diff_1}".format(diff_4 = diff_4, diff_3 = diff_3, diff_2 = diff_2, diff_1 = diff_1))
         # 卖出单独判断
         if self.tradeProcess.tradeType == gParam.PROCESS_SELL:
             if self.tradeOrder == None:
