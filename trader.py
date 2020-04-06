@@ -726,12 +726,10 @@ def before_trading_start(context):
                 break
             if kline == None:
                 kline = KLineBar()
-            timestamp = rowIndexList[idx]
-            pre_timestamp = timestamp
+            time_date = rowIndexList[idx]
+            pre_timedate = time_date
             if idx > 0:
-                pre_timestamp = rowIndexList[idx - 1]
-            time_date = timestamp
-            pre_timedate = pre_timestamp
+                pre_timedate = rowIndexList[idx - 1]
             k_open = klineList['open'][idx]
             k_close = klineList['close'][idx]
             k_high = klineList['high'][idx]
