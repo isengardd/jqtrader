@@ -74,7 +74,7 @@ class CalcCommon:
 
   def GetEMA(self, valueList, N):
     if len(valueList) == 0:
-      log.info("error: GetEMA: N = {N}, but valueList is empty".format(N))
+      log.info("error: GetEMA: N = {N}, but valueList is empty".format(N = N))
       return float(0)
     # minLen = self.GetEMA_K(N)
     # if len(valueList) < minLen:
