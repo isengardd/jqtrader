@@ -26,7 +26,7 @@ class TraderParam:
     self.MIN_BUY_COUNT = 100       # 最小买股数
 
     # 交易参数
-    self.PRODUCT = False # 是否是生产环境
+    self.PRODUCT = True # 是否是生产环境
     self.KLINE_FREQUENCY = "1d"
     self.KLINE_LENGTH = 60       # 月K线数量， 最多取 60个月数据
     self.ROOM_MAX = 10 # 要交易的股票数
@@ -683,7 +683,6 @@ def before_trading_start(context):
         # 这样前后两天执行时的rsi和kdj不一致。可能出现前一天不满足买入卖出条件，但是
         # 第二天一开盘就又满足了条件
         # 这里注意end_date需要传入前一天日期
-        timeRecord.start()
         pre_date = (context.current_dt - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
         klineList = None
         rowIndexList = None # 行索引是时间戳
@@ -697,8 +696,8 @@ def before_trading_start(context):
             fields=['open', 'close', 'high', 'low'],
             skip_paused=True
           )
-          # 生产环境的时间戳是当日8点！！
-          rowIndexList = [x / 1000000000 for x in klineList._stat_axis.values.tolist()]
+          # 生产环境的时间戳是当日8点！！ long -> datetime.date类型
+          rowIndexList = [datetime.datetime.fromtimestamp(x / 1000000000).date()  for x in klineList._stat_axis.values.tolist()]
         else:
           # 回测环境专用
           # get_bars默认跳过停牌日
@@ -708,10 +707,9 @@ def before_trading_start(context):
             unit=gParam.KLINE_FREQUENCY,
             include_now=False
           )
-          # 回测环境的时间戳是当日0点！！
-          rowIndexList = [int(time.mktime(x.timetuple())) for x in klineList['date']]
-        timeRecord.end("get klines")
-        timeRecord.start()
+          # 回测环境的时间戳是当日0点！！ datetime.date类型
+          rowIndexList = klineList['date']
+
         #print klineList._stat_axis.values.tolist()  # 取行名称
         # columns.values.tolist()   # 取列名称
         stockData = StockData()
@@ -732,8 +730,8 @@ def before_trading_start(context):
             pre_timestamp = timestamp
             if idx > 0:
                 pre_timestamp = rowIndexList[idx - 1]
-            time_date = datetime.datetime.fromtimestamp(timestamp)
-            pre_timedate = datetime.datetime.fromtimestamp(pre_timestamp)
+            time_date = timestamp
+            pre_timedate = pre_timestamp
             k_open = klineList['open'][idx]
             k_close = klineList['close'][idx]
             k_high = klineList['high'][idx]
@@ -773,8 +771,7 @@ def before_trading_start(context):
                 kline.high = lastKline.high
                 kline.low = lastKline.low
                 stockData.klines.append(kline)
-        timeRecord.end("init klineBar")
-        timeRecord.start()
+
         # print len(stockData.klines)
         # stockData.preRSI = calcRSI.GetRSI(stockData.klines, gParam.RSI_PARAM)
         #print "rsi = {0}".format(stockData.preRSI)
@@ -797,7 +794,7 @@ def before_trading_start(context):
         pre_kdj2 = stockData.preKDJ_2, pre_kdj1 = stockData.preKDJ_1))
 
         g.stockDatas[stock] = stockData
-        timeRecord.end("calc data and log")
+
 def after_trading_end(context):
   # 更新持股数
   # 当天没完成的订单，根据订单状态，回滚数据
