@@ -6,6 +6,19 @@ import math
 import calendar
 import numpy
 
+class TimeRecord:
+  def __init__(self):
+    self.startTime = 0
+    self.endTime = 0
+
+  def start(self):
+    self.startTime = time.time()
+    self.endTime = 0
+
+  def end(self, msg):
+    self.endTime = time.time()
+    log.info("{msg} time: {diffTime}".format(msg=msg, diffTime=self.endTime-self.startTime))
+
 class TraderParam:
   def __init__(self):
     self.EMA_K_FACTOR = 5.4500     # ema公式中的k值系数
@@ -13,9 +26,10 @@ class TraderParam:
     self.MIN_BUY_COUNT = 100       # 最小买股数
 
     # 交易参数
+    self.PRODUCT = False # 是否是生产环境
     self.KLINE_FREQUENCY = "1d"
     self.KLINE_LENGTH = 60       # 月K线数量， 最多取 60个月数据
-    self.ROOM_MAX = 10
+    self.ROOM_MAX = 10 # 要交易的股票数
     self.BUY_INTERVAL_DAY = 7
     self.SELL_INTERVAL_DAY = 3
     self.SH_CODE = '000001.XSHG'
@@ -225,9 +239,19 @@ class StockData:
     self.klines = []
     self.publishDays = 0 # 发行时间
     self.preRSI = float(0.00)
+    self.preMacdDiff = float(0.00)
+    self.preMacdDiff_1 = float(0.00)
+    self.preMacdDiff_2 = float(0.00)
+    self.preMacdDiff_3 = float(0.00)
+    self.preMacdDiff_4 = float(0.00)
     self.preKDJ = float(0.00)
+    self.preKDJ_1 = float(0.00)
+    self.preKDJ_2 = float(0.00)
+    self.preKDJ_3 = float(0.00)
+    self.preKDJ_4 = float(0.00)
     self.curRSI = float(0.00)
     self.curKDJ = float(0.00)
+    self.curMacdDiff = float(0.00)
 
 class TradeManager:   # 交易管理
     def __init__(self):
@@ -299,14 +323,14 @@ class TradeManager:   # 交易管理
                     log.info("data error,id = {2} curRSI = {0}, curKDJ = {1}".format(stockData.curRSI, stockData.curKDJ, stockData.id))
                     continue
                 
-                preKDJ_4 = calcKDJ.GetKDJ(stockData.klines[4:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-                preKDJ_3 = calcKDJ.GetKDJ(stockData.klines[3:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-                preKDJ_2 = calcKDJ.GetKDJ(stockData.klines[2:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-                preKDJ_1 = calcKDJ.GetKDJ(stockData.klines[1:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-                diff_4 = preKDJ_3 - preKDJ_4
-                diff_3 = preKDJ_2 - preKDJ_3
-                diff_2 = preKDJ_1 - preKDJ_2
-                diff_1 = stockData.curKDJ - preKDJ_1
+                # preKDJ_4 = calcKDJ.GetKDJ(stockData.klines[4:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+                # preKDJ_3 = calcKDJ.GetKDJ(stockData.klines[3:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+                # preKDJ_2 = calcKDJ.GetKDJ(stockData.klines[2:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+                # preKDJ_1 = calcKDJ.GetKDJ(stockData.klines[1:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+                diff_4 = stockData.preKDJ_3 - stockData.preKDJ_4
+                diff_3 = stockData.preKDJ_2 - stockData.preKDJ_3
+                diff_2 = stockData.preKDJ_1 - stockData.preKDJ_2
+                diff_1 = stockData.curKDJ - stockData.preKDJ_1
 
                 if stockData.curKDJ < 70.00 and stockData.publishDays >= 24 * 19:
                   buyReason = 0
@@ -331,7 +355,7 @@ class TradeManager:   # 交易管理
                     newRoom.tradeProcess.procesStart = GetDayTimeStamp(context.current_dt, 0)
                     newRoom.tradeProcess.stepStart = GetDayTimeStamp(context.current_dt, 0)
                     self.rooms.append(newRoom)
-                    log.info("enter room, stockid={stockid}, preKDJ={preKDJ}, curKDJ={curKDJ}, lockCash={lockCash}".format(stockid = stockData.id, preKDJ = preKDJ_1, curKDJ = stockData.curKDJ, lockCash = roomCash))
+                    log.info("enter room, stockid={stockid}, preKDJ_1={preKDJ_1}, curKDJ={curKDJ}, lockCash={lockCash}".format(stockid = stockData.id, preKDJ_1 = stockData.preKDJ_1, curKDJ = stockData.curKDJ, lockCash = roomCash))
                     log.info("buyReason: {buyReason}, buyMsg = {buyMsg}".format(buyReason = buyReason, buyMsg = buyMsg))
                     log.info("diff4={diff_4}, diff3={diff_3}, diff2={diff_2}, diff1={diff_1}".format(diff_4 = diff_4, diff_3 = diff_3, diff_2 = diff_2, diff_1 = diff_1))
                     if len(self.rooms) < g.MAX_ROOM:
@@ -486,15 +510,15 @@ class TradeRoom:    #交易席位
                 log.info("data error,id = {2} curRSI = {0}, curKDJ = {1}".format(stockData.curRSI, stockData.curKDJ, stockData.id))
                 return
             
-            calcKDJ = CalcKDJ()
-            preKDJ_4 = calcKDJ.GetKDJ(stockData.klines[4:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-            preKDJ_3 = calcKDJ.GetKDJ(stockData.klines[3:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-            preKDJ_2 = calcKDJ.GetKDJ(stockData.klines[2:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-            preKDJ_1 = calcKDJ.GetKDJ(stockData.klines[1:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-            diff_4 = preKDJ_3 - preKDJ_4
-            diff_3 = preKDJ_2 - preKDJ_3
-            diff_2 = preKDJ_1 - preKDJ_2
-            diff_1 = stockData.curKDJ - preKDJ_1
+            # calcKDJ = CalcKDJ()
+            # preKDJ_4 = calcKDJ.GetKDJ(stockData.klines[4:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+            # preKDJ_3 = calcKDJ.GetKDJ(stockData.klines[3:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+            # preKDJ_2 = calcKDJ.GetKDJ(stockData.klines[2:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+            # preKDJ_1 = calcKDJ.GetKDJ(stockData.klines[1:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+            diff_4 = stockData.preKDJ_3 - stockData.preKDJ_4
+            diff_3 = stockData.preKDJ_2 - stockData.preKDJ_3
+            diff_2 = stockData.preKDJ_1 - stockData.preKDJ_2
+            diff_1 = stockData.curKDJ - stockData.preKDJ_1
 
             sellReason = 0
             sellMsg = ""
@@ -513,7 +537,7 @@ class TradeRoom:    #交易席位
 
             if sellReason > 0:
               self.tradeProcess.changeType(context, gParam.PROCESS_SELL)
-              log.info("change to sell, stockid={stockid}, preKDJ={preKDJ}, curKDJ={curKDJ}".format(stockid = self.id, preKDJ = preKDJ_1, curKDJ = stockData.curKDJ))
+              log.info("change to sell, stockid={stockid}, preKDJ_1={preKDJ_1}, curKDJ={curKDJ}".format(stockid = self.id, preKDJ_1 = stockData.preKDJ_1, curKDJ = stockData.curKDJ))
               log.info("sellReason: {sellReason}, Msg = {sellMsg}".format(sellReason = sellReason, sellMsg = sellMsg))
               log.info("diff4={diff_4}, diff3={diff_3}, diff2={diff_2}, diff1={diff_1}".format(diff_4 = diff_4, diff_3 = diff_3, diff_2 = diff_2, diff_1 = diff_1))
         # 卖出单独判断
@@ -608,7 +632,8 @@ def initialize(context):
     # log.info(g.securities)
     # 设定沪深300作为基准
     set_benchmark('000300.XSHG')
-
+    # 开启动态复权(真实价格)模式
+    set_option('use_real_price', True)
 # 每个单位时间(如果按天回测,则每天调用一次,如果按分钟,则每分钟调用一次)调用一次
 def handle_data(context, data):
     g.tradeManager.run(context, data)
@@ -616,6 +641,7 @@ def handle_data(context, data):
 # 每天 9：00 执行，更新指标数据
 def before_trading_start(context):
     # 初始化 rsi 和 kdj 数据
+    timeRecord = TimeRecord()
     calcRSI = CalcRSI()
     calcKDJ = CalcKDJ()
     calcMACD = CalcMACD()
@@ -657,16 +683,35 @@ def before_trading_start(context):
         # 这样前后两天执行时的rsi和kdj不一致。可能出现前一天不满足买入卖出条件，但是
         # 第二天一开盘就又满足了条件
         # 这里注意end_date需要传入前一天日期
+        timeRecord.start()
         pre_date = (context.current_dt - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-        klineList = get_price(
+        klineList = None
+        rowIndexList = None # 行索引是时间戳
+        if gParam.PRODUCT:
+          klineList = get_price(
             security=stock,
             count=gParam.KLINE_LENGTH * 30, # 这里是天数
             #end_date=datetime.datetime.now().strftime("%Y-%m-%d"),
             end_date=pre_date,
             frequency=gParam.KLINE_FREQUENCY,
             fields=['open', 'close', 'high', 'low'],
-            skip_paused=True)
-
+            skip_paused=True
+          )
+          # 生产环境的时间戳是当日8点！！
+          rowIndexList = [x / 1000000000 for x in klineList._stat_axis.values.tolist()]
+        else:
+          # 回测环境专用
+          # get_bars默认跳过停牌日
+          klineList = get_bars(security=stock,
+            count=gParam.KLINE_LENGTH * 30,
+            fields=['date', 'open', 'close', 'high', 'low'],
+            unit=gParam.KLINE_FREQUENCY,
+            include_now=False
+          )
+          # 回测环境的时间戳是当日0点！！
+          rowIndexList = [int(time.mktime(x.timetuple())) for x in klineList['date']]
+        timeRecord.end("get klines")
+        timeRecord.start()
         #print klineList._stat_axis.values.tolist()  # 取行名称
         # columns.values.tolist()   # 取列名称
         stockData = StockData()
@@ -675,7 +720,6 @@ def before_trading_start(context):
         dealWithFirstMonth = False
         kline = None
         #print(len(klineList._stat_axis.values.tolist()))
-        rowIndexList = klineList._stat_axis.values.tolist() # 行索引是时间
         for idx in range(len(rowIndexList)-1, -1, -1):
             if numpy.isnan(klineList['open'][idx]):
                 # 已经取到未上市的日期，后面的不再取了
@@ -684,10 +728,10 @@ def before_trading_start(context):
                 break
             if kline == None:
                 kline = KLineBar()
-            timestamp = rowIndexList[idx] / 1000000000
+            timestamp = rowIndexList[idx]
             pre_timestamp = timestamp
             if idx > 0:
-                pre_timestamp = rowIndexList[idx - 1] / 1000000000
+                pre_timestamp = rowIndexList[idx - 1]
             time_date = datetime.datetime.fromtimestamp(timestamp)
             pre_timedate = datetime.datetime.fromtimestamp(pre_timestamp)
             k_open = klineList['open'][idx]
@@ -729,14 +773,16 @@ def before_trading_start(context):
                 kline.high = lastKline.high
                 kline.low = lastKline.low
                 stockData.klines.append(kline)
+        timeRecord.end("init klineBar")
+        timeRecord.start()
         # print len(stockData.klines)
         # stockData.preRSI = calcRSI.GetRSI(stockData.klines, gParam.RSI_PARAM)
         #print "rsi = {0}".format(stockData.preRSI)
         stockData.preKDJ = calcKDJ.GetKDJ(stockData.klines, gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-        preKDJ_4 = calcKDJ.GetKDJ(stockData.klines[4:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-        preKDJ_3 = calcKDJ.GetKDJ(stockData.klines[3:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-        preKDJ_2 = calcKDJ.GetKDJ(stockData.klines[2:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-        preKDJ_1 = calcKDJ.GetKDJ(stockData.klines[1:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+        stockData.preKDJ_4 = calcKDJ.GetKDJ(stockData.klines[4:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+        stockData.preKDJ_3 = calcKDJ.GetKDJ(stockData.klines[3:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+        stockData.preKDJ_2 = calcKDJ.GetKDJ(stockData.klines[2:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+        stockData.preKDJ_1 = calcKDJ.GetKDJ(stockData.klines[1:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
         stockData.curRSI = stockData.preRSI
         stockData.curKDJ = stockData.preKDJ
         curMacdDiff = calcMACD.GetDiff(stockData.klines)
@@ -747,11 +793,11 @@ def before_trading_start(context):
         log.info("id = {id}, pub={publishDays}, pre_open={preDayOpen}, pre_close={preDayClose}, k_open={k_open}, k_close={k_close}, \n rsi = {rsi}, macd_diff={macd_diff}, k-4={pre_kdj4},k-3={pre_kdj3}, k-2={pre_kdj2}, k-1={pre_kdj1}, kdj = {kdj}"\
         .format(id = stockData.id, publishDays = stockData.publishDays, k_open = k_open, \
         k_close = k_close, preDayOpen = preDayOpen, preDayClose = preDayClose, \
-        rsi = stockData.preRSI, macd_diff=curMacdDiff, kdj = stockData.preKDJ, pre_kdj4 = preKDJ_4, pre_kdj3 = preKDJ_3, \
-        pre_kdj2 = preKDJ_2, pre_kdj1 = preKDJ_1))
+        rsi = stockData.preRSI, macd_diff=curMacdDiff, kdj = stockData.preKDJ, pre_kdj4 = stockData.preKDJ_4, pre_kdj3 = stockData.preKDJ_3, \
+        pre_kdj2 = stockData.preKDJ_2, pre_kdj1 = stockData.preKDJ_1))
 
         g.stockDatas[stock] = stockData
-
+        timeRecord.end("calc data and log")
 def after_trading_end(context):
   # 更新持股数
   # 当天没完成的订单，根据订单状态，回滚数据
