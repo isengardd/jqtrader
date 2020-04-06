@@ -6,209 +6,253 @@ import math
 import calendar
 import numpy
 
+class TimeRecord:
+  def __init__(self):
+    self.startTime = 0
+    self.endTime = 0
+
+  def start(self):
+    self.startTime = time.time()
+    self.endTime = 0
+
+  def end(self, msg):
+    self.endTime = time.time()
+    log.info("{msg} time: {diffTime}".format(msg=msg, diffTime=self.endTime-self.startTime))
+
 class TraderParam:
-    def __init__(self):
-        self.EMA_K_FACTOR = 5.4500     # ema公式中的k值系数
-        self.ERR_DATA = -666666        # 错误数据
-        self.MIN_BUY_COUNT = 100       # 最小买股数
+  def __init__(self):
+    self.EMA_K_FACTOR = 5.4500     # ema公式中的k值系数
+    self.ERR_DATA = -666666        # 错误数据
+    self.MIN_BUY_COUNT = 100       # 最小买股数
 
-        # 交易参数
-        self.KLINE_FREQUENCY = "1d"
-        self.KLINE_LENGTH = 60       # 月K线， 最多取 60个月数据
-        self.ROOM_MAX = 10
-        self.BUY_INTERVAL_DAY = 7
-        self.SELL_INTERVAL_DAY = 3
-        self.SH_CODE = '000001.XSHG'
-        self.SH_DEAD_KDJ_LINE = 90.00  # 上证指数kdj超过这个数值，停止交易
+    # 交易参数
+    self.PRODUCT = True # 是否是生产环境
+    self.KLINE_FREQUENCY = "1d"
+    self.KLINE_LENGTH = 60       # 月K线数量， 最多取 60个月数据
+    self.ROOM_MAX = 10 # 要交易的股票数
+    self.BUY_INTERVAL_DAY = 7
+    self.SELL_INTERVAL_DAY = 3
+    self.SH_CODE = '000001.XSHG'
+    self.SH_DEAD_KDJ_LINE = 90.00  # 上证指数kdj超过这个数值，停止交易
 
-        self.BUY_IN_STEP_RATE = [1.00]# [0.30, 0.30, 0.40]
-        self.SELL_OUT_STEP_RATE = [1.00]# [0.30, 0.50, 0.20]
+    self.BUY_IN_STEP_RATE = [1.00]# [0.30, 0.30, 0.40]
+    self.SELL_OUT_STEP_RATE = [1.00]# [0.30, 0.50, 0.20]
 
-        self.RSI_PARAM = 5
-        self.KDJ_PARAM1 = 9
-        self.KDJ_PARAM2 = 3
-        self.KDJ_PARAM3 = 3
+    self.SKILL_MACD = 0
+    self.SKILL_RSI = 1
+    self.SKILL_KDJ = 2
+    self.RSI_PARAM = 5
+    self.KDJ_PARAM1 = 9
+    self.KDJ_PARAM2 = 3
+    self.KDJ_PARAM3 = 3
 
-        # 枚举
-        self.PROCESS_NONE = 0
-        self.PROCESS_BUY = 1
-        self.PROCESS_BUY_DONE = 2
-        self.PROCESS_SELL = 3
-        self.PROCESS_SELL_DONE = 4
+    # 枚举
+    self.PROCESS_NONE = 0
+    self.PROCESS_BUY = 1
+    self.PROCESS_BUY_DONE = 2
+    self.PROCESS_SELL = 3
+    self.PROCESS_SELL_DONE = 4
 
-        self.ORDER_REBUY = 1
-        self.ORDER_RESELL = 2
+    self.ORDER_REBUY = 1
+    self.ORDER_RESELL = 2
 
 gParam = TraderParam()
 
 def LowStockCount(num):
-    return int(num/100.00)*100
+  return int(num/100.00)*100
 
 def GetDayTimeStamp(dt, deltaDay):
-    # 获取当天起始时间戳
-    tp = datetime.datetime(year=dt.year, month=dt.month, day=dt.day, hour=0, minute=0, second=0).timetuple()
-    tt = time.mktime(tp) + deltaDay * 86400
-    return int(tt)
-    
+  # 获取当天起始时间戳
+  tp = datetime.datetime(year=dt.year, month=dt.month, day=dt.day, hour=0, minute=0, second=0).timetuple()
+  tt = time.mktime(tp) + deltaDay * 86400
+  return int(tt)
+
 class CalcCommon:
-    def __init__(self):
-        self.emaFactorMap = {}
-    
-    def GetEMA(self, valueList, N):
-        if len(valueList) == 0:
-            return float(0)
-        minLen = self.GetEMA_K(N)
-        if len(valueList) < minLen:
-            log.info("GetEMA: N = {0}, minLen = {1}, len(val) = {2}".format(N, minLen, len(valueList)))
-            return float(0)
-        
-        emaFactorList = self.GetEMAFactorList(N)
-        if len(emaFactorList) == 0:
-            log.info("GetEMA: len(emaFactorList) == 0")
-            return float(0)
-        alpha = self.GetAlpha(N)
-        ema = float(0)
-        for i in range(len(emaFactorList)):
-            ema += (float(valueList[i]) * emaFactorList[i])
-        
-        ema = ema*alpha
-        return ema
-        
-    def GetEMA_K(self, N):
-        return int(float(gParam.EMA_K_FACTOR) * float(N + 1))
-    
-    def GetAlpha(self, N):
-        return float(1) / float(N)
-        
-    def GetEMAFactorList(self, N):
-        if self.emaFactorMap.has_key(N):
-           return self.emaFactorMap[N]
-        if N <= 0:
-            return []
-        
-        alpha = self.GetAlpha(N)
-        k = self.GetEMA_K(N)
-        emaFactorList = [1.0000]
-        for i in range(1, k):
-            emaFactorList.append(float(emaFactorList[i-1])*(float(1) - alpha))
-        self.emaFactorMap[N] = emaFactorList
-        return self.emaFactorMap[N]
-    
-    def GetMaxPrice(self, kLine):
-        max = float(0)
-        for val in kLine:
-            if val.high > max:
-                max = val.high
-        return max
-    
-    def GetMinPrice(self, kLine):
-        min = float(10000000)
-        for val in kLine:
-            if val.low < min:
-                min = val.low
-        return min
-    
+  def __init__(self):
+    self.emaFactorMap = {}
+    self.skillType = gParam.SKILL_MACD
+
+  def GetEMA(self, valueList, N):
+    if len(valueList) == 0:
+      log.info("error: GetEMA: N = {N}, but valueList is empty".format(N))
+      return float(0)
+    # minLen = self.GetEMA_K(N)
+    # if len(valueList) < minLen:
+    #   log.info("GetEMA: N = {0}, minLen = {1}, len(val) = {2}".format(N, minLen, len(valueList)))
+    #   return float(0)
+
+    emaFactorList = self.GetEMAFactorList(N)
+    if len(emaFactorList) == 0:
+      log.info("GetEMA: len(emaFactorList) == 0")
+      return float(0)
+    alpha = self.GetAlpha(N)
+    ema = float(0)
+    for i in range(len(emaFactorList)):
+      val = float(valueList[i]) if len(valueList) > i else 0
+      ema += (float(val) * emaFactorList[i])
+
+    ema = ema*alpha
+    return ema
+
+  def GetEMA_K(self, N):
+    return int(float(gParam.EMA_K_FACTOR) * float(N + 1))
+
+  def GetAlpha(self, N):
+    if self.skillType == gParam.SKILL_MACD:
+      return float(2) / float(N+1)
+    else:
+      return float(1) / float(N)
+
+  def GetEMAFactorList(self, N):
+    if self.emaFactorMap.has_key(N):
+      return self.emaFactorMap[N]
+    if N <= 0:
+      return []
+
+    alpha = self.GetAlpha(N)
+    k = self.GetEMA_K(N)
+    emaFactorList = [1.0000]
+    for i in range(1, k):
+      emaFactorList.append(float(emaFactorList[i-1])*(float(1) - alpha))
+    self.emaFactorMap[N] = emaFactorList
+    return self.emaFactorMap[N]
+
+  def GetMaxPrice(self, kLine):
+    max = float(0)
+    for val in kLine:
+      if val.high > max:
+        max = val.high
+    return max
+
+  def GetMinPrice(self, kLine):
+    min = float(10000000)
+    for val in kLine:
+      if val.low < min:
+        min = val.low
+    return min
+
 class CalcKDJ(CalcCommon):
-    def __init__(self):
-        CalcCommon.__init__(self)
-    
-    def GetKDJ(self, kLine, N, M1, M2):
-        if N == 0 or M1 == 0 or M2 == 0:
-            return (gParam.ERR_DATA, gParam.ERR_DATA)
-        # 这里只返回 (k,d)
-        rsvDay = int(self.GetEMA_K(M2) + self.GetEMA_K(M1)) + int(N)
-        if len(kLine) < rsvDay:
-            log.info("GetKDJ: len(kLine) = {0}, rsvDay = {1}".format(len(kLine), rsvDay))
-            return (gParam.ERR_DATA, gParam.ERR_DATA)
-        rsvList = [float(0) for i in range(rsvDay)]
-        for i in range(rsvDay):
-            rsvList[i] = self.GetRSV(kLine[i : int(N) + i], N)
-        # 算出K值
-        kDay = int(self.GetEMA_K(M2))
-        if kDay < 2:
-            log.info("GetKDJ: kDay < 2, M2 = {0}".format(M2))
-            return (gParam.ERR_DATA, gParam.ERR_DATA)
-        kList = [float(0) for i in range(kDay)]
-        kList[len(kList)-1] = self.GetEMA(rsvList[len(kList)-1 : len(kList)+int(self.GetEMA_K(M1))-1], M1)
-        for i in range(len(kList)-2, -1, -1):
-            if math.isnan(kList[i+1]):
-                kList[i+1] = 50.00
-            kList[i] = self.GetAlpha(M1)*rsvList[i] + kList[i+1]*(1-self.GetAlpha(M1))
-        # 算出d值
-        dVal = self.GetEMA(kList, M2)
-        # print kList
-        # print rsvList
-        return (round(kList[0], 2), round(dVal, 2))
-    def GetRSV(self, kLine, N):
-        if len(kLine) < N:
-            if len(kLine) == 0:
-                log.info("GetRSV error, len(kLine) = {0} < N = {1}".format(len(kLine), N))
-                return gParam.ERR_DATA
-            else:
-                N = len(kLine)
-        
-        max = self.GetMaxPrice(kLine[:N])
-        min = self.GetMinPrice(kLine[:N])
-        
-        if max == gParam.ERR_DATA or min == gParam.ERR_DATA or min == max:
-            log.info("GetRSV error, min = err or max = err")
-            return
-        
-        # print "max = {0}, min = {1}".format(max, min)
-        rsv = (kLine[0].close - min) / (max - min) * float(100)
-        if rsv < float(1):
-            rsv = float(1)
-            
-        if rsv > float(100):
-            rsv = float(100)
-        
-        return rsv
-    def CalcEMAFactorList(self, N):
-        pass
-    
+  def __init__(self):
+    CalcCommon.__init__(self)
+    self.skillType = gParam.SKILL_KDJ
+
+  def GetKDJ(self, kLine, N, M1, M2):
+    if N == 0 or M1 == 0 or M2 == 0:
+      return (gParam.ERR_DATA, gParam.ERR_DATA)
+    # 这里只返回 (k,d)
+    rsvDay = int(self.GetEMA_K(M2) + self.GetEMA_K(M1)) + int(N)
+    if len(kLine) < rsvDay:
+      log.info("GetKDJ: len(kLine) = {0}, rsvDay = {1}".format(len(kLine), rsvDay))
+      return (gParam.ERR_DATA, gParam.ERR_DATA)
+    rsvList = [float(0) for i in range(rsvDay)]
+    for i in range(rsvDay):
+      rsvList[i] = self.GetRSV(kLine[i : int(N) + i], N)
+    # 算出K值
+    kDay = int(self.GetEMA_K(M2))
+    if kDay < 2:
+      log.info("GetKDJ: kDay < 2, M2 = {0}".format(M2))
+      return (gParam.ERR_DATA, gParam.ERR_DATA)
+    kList = [float(0) for i in range(kDay)]
+    kList[len(kList)-1] = self.GetEMA(rsvList[len(kList)-1 : len(kList)+int(self.GetEMA_K(M1))-1], M1)
+    for i in range(len(kList)-2, -1, -1):
+      if math.isnan(kList[i+1]):
+        kList[i+1] = 50.00
+      kList[i] = self.GetAlpha(M1)*rsvList[i] + kList[i+1]*(1-self.GetAlpha(M1))
+    # 算出d值
+    dVal = self.GetEMA(kList, M2)
+    # print kList
+    # print rsvList
+    return (round(kList[0], 2), round(dVal, 2))
+  def GetRSV(self, kLine, N):
+    if len(kLine) < N:
+      if len(kLine) == 0:
+        log.info("GetRSV error, len(kLine) = {0} < N = {1}".format(len(kLine), N))
+        return gParam.ERR_DATA
+      else:
+        N = len(kLine)
+
+    max = self.GetMaxPrice(kLine[:N])
+    min = self.GetMinPrice(kLine[:N])
+
+    if max == gParam.ERR_DATA or min == gParam.ERR_DATA or min == max:
+      log.info("GetRSV error, min = err or max = err")
+      return
+
+    # print "max = {0}, min = {1}".format(max, min)
+    rsv = (kLine[0].close - min) / (max - min) * float(100)
+    if rsv < float(1):
+      rsv = float(1)
+
+    if rsv > float(100):
+      rsv = float(100)
+
+    return rsv
+  def CalcEMAFactorList(self, N):
+    pass
+
 class CalcRSI(CalcCommon):
-    def __init__(self):
-        CalcCommon.__init__(self)
-    
-    def GetRSI(self, kLine, N):
-        if len(kLine) == 0:
-            return gParam.ERR_DATA
-        uKline = [float(0) for i in kLine]
-        dKline = [float(0) for i in kLine]
-        
-        for i in range(len(kLine) - 1):
-            if kLine[i].close > kLine[i+1].close:
-                uKline[i] = kLine[i].close - kLine[i+1].close
-            elif kLine[i].close < kLine[i+1].close:
-                dKline[i] = kLine[i+1].close - kLine[i].close
-        uEma = self.GetEMA(uKline, N)
-        dEma = self.GetEMA(dKline, N)
-        if uEma == 0 or dEma == 0:
-            return gParam.ERR_DATA
-        # print "uEma = {0}, dEma = {1}".format(uEma, dEma)
-        return (uEma / (uEma + dEma)) * float(100.0000)
-        
-    def CalcEMAFactorList(self, N):
-        pass
-    
+  def __init__(self):
+    CalcCommon.__init__(self)
+    self.skillType = gParam.SKILL_RSI
+
+  def GetRSI(self, kLine, N):
+    if len(kLine) == 0:
+      return gParam.ERR_DATA
+    uKline = [float(0) for i in kLine]
+    dKline = [float(0) for i in kLine]
+
+    for i in range(len(kLine) - 1):
+      if kLine[i].close > kLine[i+1].close:
+        uKline[i] = kLine[i].close - kLine[i+1].close
+      elif kLine[i].close < kLine[i+1].close:
+        dKline[i] = kLine[i+1].close - kLine[i].close
+    uEma = self.GetEMA(uKline, N)
+    dEma = self.GetEMA(dKline, N)
+    if uEma == 0 or dEma == 0:
+      return gParam.ERR_DATA
+    # print "uEma = {0}, dEma = {1}".format(uEma, dEma)
+    return (uEma / (uEma + dEma)) * float(100.0000)
+
+  def CalcEMAFactorList(self, N):
+    pass
+
+class CalcMACD(CalcCommon):
+  def __init__(self):
+    CalcCommon.__init__(self)
+    self.skillType = gParam.SKILL_MACD
+
+  def GetDiff(self, kLine):
+    closeKline = [i.close for i in kLine]
+    return self.GetEMA(closeKline, 12) - self.GetEMA(closeKline, 26)
+
 class KLineBar:
-    def __init__(self):
-        self.open = float(0.00)
-        self.close = float(0.00)
-        self.high = float(0.00)
-        self.low = float(0.00)
-        self.timestamp = 0
+  def __init__(self):
+    self.open = float(0.00)
+    self.close = float(0.00)
+    self.high = float(0.00)
+    self.low = float(0.00)
+    self.timestamp = 0
 
 class StockData:
-    def __init__(self):
-        self.id = ''
-        self.klines = []
-        self.publishDays = 0 # 发行时间
-        self.preRSI = float(0.00)
-        self.preKDJ = float(0.00)
-        self.curRSI = float(0.00)
-        self.curKDJ = float(0.00)
-        
+  def __init__(self):
+    self.id = ''
+    self.klines = []
+    self.publishDays = 0 # 发行时间
+    self.preRSI = float(0.00)
+    self.preMacdDiff = float(0.00)
+    self.preMacdDiff_1 = float(0.00)
+    self.preMacdDiff_2 = float(0.00)
+    self.preMacdDiff_3 = float(0.00)
+    self.preMacdDiff_4 = float(0.00)
+    self.preKDJ = float(0.00)
+    self.preKDJ_1 = float(0.00)
+    self.preKDJ_2 = float(0.00)
+    self.preKDJ_3 = float(0.00)
+    self.preKDJ_4 = float(0.00)
+    self.curRSI = float(0.00)
+    self.curKDJ = float(0.00)
+    self.curMacdDiff = float(0.00)
+
 class TradeManager:   # 交易管理
     def __init__(self):
         self.rooms = [] #交易席位
@@ -279,14 +323,14 @@ class TradeManager:   # 交易管理
                     log.info("data error,id = {2} curRSI = {0}, curKDJ = {1}".format(stockData.curRSI, stockData.curKDJ, stockData.id))
                     continue
                 
-                preKDJ_4 = calcKDJ.GetKDJ(stockData.klines[4:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-                preKDJ_3 = calcKDJ.GetKDJ(stockData.klines[3:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-                preKDJ_2 = calcKDJ.GetKDJ(stockData.klines[2:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-                preKDJ_1 = calcKDJ.GetKDJ(stockData.klines[1:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-                diff_4 = preKDJ_3 - preKDJ_4
-                diff_3 = preKDJ_2 - preKDJ_3
-                diff_2 = preKDJ_1 - preKDJ_2
-                diff_1 = stockData.curKDJ - preKDJ_1
+                # preKDJ_4 = calcKDJ.GetKDJ(stockData.klines[4:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+                # preKDJ_3 = calcKDJ.GetKDJ(stockData.klines[3:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+                # preKDJ_2 = calcKDJ.GetKDJ(stockData.klines[2:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+                # preKDJ_1 = calcKDJ.GetKDJ(stockData.klines[1:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+                diff_4 = stockData.preKDJ_3 - stockData.preKDJ_4
+                diff_3 = stockData.preKDJ_2 - stockData.preKDJ_3
+                diff_2 = stockData.preKDJ_1 - stockData.preKDJ_2
+                diff_1 = stockData.curKDJ - stockData.preKDJ_1
 
                 if stockData.curKDJ < 70.00 and stockData.publishDays >= 24 * 19:
                   buyReason = 0
@@ -311,7 +355,7 @@ class TradeManager:   # 交易管理
                     newRoom.tradeProcess.procesStart = GetDayTimeStamp(context.current_dt, 0)
                     newRoom.tradeProcess.stepStart = GetDayTimeStamp(context.current_dt, 0)
                     self.rooms.append(newRoom)
-                    log.info("enter room, stockid={stockid}, preKDJ={preKDJ}, curKDJ={curKDJ}, lockCash={lockCash}".format(stockid = stockData.id, preKDJ = preKDJ_1, curKDJ = stockData.curKDJ, lockCash = roomCash))
+                    log.info("enter room, stockid={stockid}, preKDJ_1={preKDJ_1}, curKDJ={curKDJ}, lockCash={lockCash}".format(stockid = stockData.id, preKDJ_1 = stockData.preKDJ_1, curKDJ = stockData.curKDJ, lockCash = roomCash))
                     log.info("buyReason: {buyReason}, buyMsg = {buyMsg}".format(buyReason = buyReason, buyMsg = buyMsg))
                     log.info("diff4={diff_4}, diff3={diff_3}, diff2={diff_2}, diff1={diff_1}".format(diff_4 = diff_4, diff_3 = diff_3, diff_2 = diff_2, diff_1 = diff_1))
                     if len(self.rooms) < g.MAX_ROOM:
@@ -466,15 +510,15 @@ class TradeRoom:    #交易席位
                 log.info("data error,id = {2} curRSI = {0}, curKDJ = {1}".format(stockData.curRSI, stockData.curKDJ, stockData.id))
                 return
             
-            calcKDJ = CalcKDJ()
-            preKDJ_4 = calcKDJ.GetKDJ(stockData.klines[4:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-            preKDJ_3 = calcKDJ.GetKDJ(stockData.klines[3:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-            preKDJ_2 = calcKDJ.GetKDJ(stockData.klines[2:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-            preKDJ_1 = calcKDJ.GetKDJ(stockData.klines[1:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-            diff_4 = preKDJ_3 - preKDJ_4
-            diff_3 = preKDJ_2 - preKDJ_3
-            diff_2 = preKDJ_1 - preKDJ_2
-            diff_1 = stockData.curKDJ - preKDJ_1
+            # calcKDJ = CalcKDJ()
+            # preKDJ_4 = calcKDJ.GetKDJ(stockData.klines[4:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+            # preKDJ_3 = calcKDJ.GetKDJ(stockData.klines[3:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+            # preKDJ_2 = calcKDJ.GetKDJ(stockData.klines[2:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+            # preKDJ_1 = calcKDJ.GetKDJ(stockData.klines[1:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+            diff_4 = stockData.preKDJ_3 - stockData.preKDJ_4
+            diff_3 = stockData.preKDJ_2 - stockData.preKDJ_3
+            diff_2 = stockData.preKDJ_1 - stockData.preKDJ_2
+            diff_1 = stockData.curKDJ - stockData.preKDJ_1
 
             sellReason = 0
             sellMsg = ""
@@ -493,7 +537,7 @@ class TradeRoom:    #交易席位
 
             if sellReason > 0:
               self.tradeProcess.changeType(context, gParam.PROCESS_SELL)
-              log.info("change to sell, stockid={stockid}, preKDJ={preKDJ}, curKDJ={curKDJ}".format(stockid = self.id, preKDJ = preKDJ_1, curKDJ = stockData.curKDJ))
+              log.info("change to sell, stockid={stockid}, preKDJ_1={preKDJ_1}, curKDJ={curKDJ}".format(stockid = self.id, preKDJ_1 = stockData.preKDJ_1, curKDJ = stockData.curKDJ))
               log.info("sellReason: {sellReason}, Msg = {sellMsg}".format(sellReason = sellReason, sellMsg = sellMsg))
               log.info("diff4={diff_4}, diff3={diff_3}, diff2={diff_2}, diff1={diff_1}".format(diff_4 = diff_4, diff_3 = diff_3, diff_2 = diff_2, diff_1 = diff_1))
         # 卖出单独判断
@@ -588,7 +632,8 @@ def initialize(context):
     # log.info(g.securities)
     # 设定沪深300作为基准
     set_benchmark('000300.XSHG')
-
+    # 开启动态复权(真实价格)模式
+    set_option('use_real_price', True)
 # 每个单位时间(如果按天回测,则每天调用一次,如果按分钟,则每分钟调用一次)调用一次
 def handle_data(context, data):
     g.tradeManager.run(context, data)
@@ -596,8 +641,10 @@ def handle_data(context, data):
 # 每天 9：00 执行，更新指标数据
 def before_trading_start(context):
     # 初始化 rsi 和 kdj 数据
+    timeRecord = TimeRecord()
     calcRSI = CalcRSI()
     calcKDJ = CalcKDJ()
+    calcMACD = CalcMACD()
     # 初始化全局参数
     g.MAX_ROOM = gParam.ROOM_MAX
     try:
@@ -637,15 +684,32 @@ def before_trading_start(context):
         # 第二天一开盘就又满足了条件
         # 这里注意end_date需要传入前一天日期
         pre_date = (context.current_dt - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-        klineList = get_price(
-            security=stock, 
-            count=gParam.KLINE_LENGTH * 30, 
-            #end_date=datetime.datetime.now().strftime("%Y-%m-%d"), 
+        klineList = None
+        rowIndexList = None # 行索引是时间戳
+        if gParam.PRODUCT:
+          klineList = get_price(
+            security=stock,
+            count=gParam.KLINE_LENGTH * 30, # 这里是天数
+            #end_date=datetime.datetime.now().strftime("%Y-%m-%d"),
             end_date=pre_date,
-            frequency=gParam.KLINE_FREQUENCY, 
-            fields=['open', 'close', 'high', 'low'], 
-            skip_paused=True)
-        
+            frequency=gParam.KLINE_FREQUENCY,
+            fields=['open', 'close', 'high', 'low'],
+            skip_paused=True
+          )
+          # 生产环境的时间戳是当日8点！！ long -> datetime.date类型
+          rowIndexList = [datetime.datetime.fromtimestamp(x / 1000000000).date()  for x in klineList._stat_axis.values.tolist()]
+        else:
+          # 回测环境专用
+          # get_bars默认跳过停牌日
+          klineList = get_bars(security=stock,
+            count=gParam.KLINE_LENGTH * 30,
+            fields=['date', 'open', 'close', 'high', 'low'],
+            unit=gParam.KLINE_FREQUENCY,
+            include_now=False
+          )
+          # 回测环境的时间戳是当日0点！！ datetime.date类型
+          rowIndexList = klineList['date']
+
         #print klineList._stat_axis.values.tolist()  # 取行名称
         # columns.values.tolist()   # 取列名称
         stockData = StockData()
@@ -654,7 +718,7 @@ def before_trading_start(context):
         dealWithFirstMonth = False
         kline = None
         #print(len(klineList._stat_axis.values.tolist()))
-        for idx in range(len(klineList._stat_axis.values.tolist())-1, -1, -1):
+        for idx in range(len(rowIndexList)-1, -1, -1):
             if numpy.isnan(klineList['open'][idx]):
                 # 已经取到未上市的日期，后面的不再取了
                 if kline != None:
@@ -662,12 +726,12 @@ def before_trading_start(context):
                 break
             if kline == None:
                 kline = KLineBar()
-            timestamp = klineList._stat_axis.values.tolist()[idx] / 1000000000
+            timestamp = rowIndexList[idx]
             pre_timestamp = timestamp
             if idx > 0:
-                pre_timestamp = klineList._stat_axis.values.tolist()[idx - 1] / 1000000000
-            time_date = datetime.datetime.fromtimestamp(timestamp)
-            pre_timedate = datetime.datetime.fromtimestamp(pre_timestamp)
+                pre_timestamp = rowIndexList[idx - 1]
+            time_date = timestamp
+            pre_timedate = pre_timestamp
             k_open = klineList['open'][idx]
             k_close = klineList['close'][idx]
             k_high = klineList['high'][idx]
@@ -696,7 +760,7 @@ def before_trading_start(context):
                 else:
                     stockData.klines.append(kline)
                 kline = None
-        stockData.publishDays = len(klineList._stat_axis.values.tolist())-1-idx
+        stockData.publishDays = len(rowIndexList)-1-idx
 
         if len(stockData.klines) < gParam.KLINE_LENGTH and len(stockData.klines) > 0:
             lastKline = stockData.klines[-1]
@@ -707,63 +771,72 @@ def before_trading_start(context):
                 kline.high = lastKline.high
                 kline.low = lastKline.low
                 stockData.klines.append(kline)
+
         # print len(stockData.klines)
         # stockData.preRSI = calcRSI.GetRSI(stockData.klines, gParam.RSI_PARAM)
         #print "rsi = {0}".format(stockData.preRSI)
         stockData.preKDJ = calcKDJ.GetKDJ(stockData.klines, gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-        preKDJ_4 = calcKDJ.GetKDJ(stockData.klines[4:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-        preKDJ_3 = calcKDJ.GetKDJ(stockData.klines[3:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-        preKDJ_2 = calcKDJ.GetKDJ(stockData.klines[2:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-        preKDJ_1 = calcKDJ.GetKDJ(stockData.klines[1:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+        stockData.preKDJ_4 = calcKDJ.GetKDJ(stockData.klines[4:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+        stockData.preKDJ_3 = calcKDJ.GetKDJ(stockData.klines[3:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+        stockData.preKDJ_2 = calcKDJ.GetKDJ(stockData.klines[2:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+        stockData.preKDJ_1 = calcKDJ.GetKDJ(stockData.klines[1:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
         stockData.curRSI = stockData.preRSI
         stockData.curKDJ = stockData.preKDJ
-        cur_open = stockData.klines[0].open if len(stockData.klines) > 0 else 0
-        cur_close = stockData.klines[0].close if len(stockData.klines) > 0 else 0
-        print "id = {0}, pub={9}, open={4}, close={3}, rsi = {1}, kdj = {2}, k-4={5},k-3={6}, k-2={7}, k-1={8}".format(stockData.id, stockData.preRSI, stockData.preKDJ, cur_close, cur_open, preKDJ_4, preKDJ_3, preKDJ_2,preKDJ_1, stockData.publishDays)
+        curMacdDiff = calcMACD.GetDiff(stockData.klines)
+        k_open = stockData.klines[0].open if len(stockData.klines) > 0 else 0
+        k_close = stockData.klines[0].close if len(stockData.klines) > 0 else 0
+        preDayOpen = klineList['open'][len(rowIndexList) - 1] if len(rowIndexList) > 0 else 0
+        preDayClose = klineList['close'][len(rowIndexList) - 1] if len(rowIndexList) > 0 else 0
+        log.info("id = {id}, pub={publishDays}, pre_open={preDayOpen}, pre_close={preDayClose}, k_open={k_open}, k_close={k_close}, \n rsi = {rsi}, macd_diff={macd_diff}, k-4={pre_kdj4},k-3={pre_kdj3}, k-2={pre_kdj2}, k-1={pre_kdj1}, kdj = {kdj}"\
+        .format(id = stockData.id, publishDays = stockData.publishDays, k_open = k_open, \
+        k_close = k_close, preDayOpen = preDayOpen, preDayClose = preDayClose, \
+        rsi = stockData.preRSI, macd_diff=curMacdDiff, kdj = stockData.preKDJ, pre_kdj4 = stockData.preKDJ_4, pre_kdj3 = stockData.preKDJ_3, \
+        pre_kdj2 = stockData.preKDJ_2, pre_kdj1 = stockData.preKDJ_1))
+
         g.stockDatas[stock] = stockData
 
 def after_trading_end(context):
-    # 更新持股数
-    # 当天没完成的订单，根据订单状态，回滚数据
-    for room in g.tradeManager.rooms:
-        if context.subportfolios[0].positions.has_key(room.id):
-            position = context.subportfolios[0].positions[room.id]
-            room.stockCount = position.total_amount
-            
-        if room.tradeOrder != None:
-            ordersDic = get_orders(order_id=room.tradeOrder.id)
-            if ordersDic.has_key(room.tradeOrder.id):
-                cur_order = ordersDic[room.tradeOrder.id]
-                if cur_order.is_buy:
-                    room.cashLeft -= cur_order.filled * cur_order.price
-                    if room.cashLeft < 0:
-                        room.cashLeft = 0
-                if cur_order.amount == cur_order.filled:
-                    # 全部成交，进入下一个阶段或者状态
-                    room.tradeProcess.tradeStep += 1
-                    if cur_order.is_buy:
-                        if room.tradeProcess.tradeStep >= len(room.tradeProcess.buyInRate):
-                            room.tradeProcess.changeType(context, gParam.PROCESS_BUY_DONE)
-                        else:
-                            room.tradeProcess.stepStart = GetDayTimeStamp(context.current_dt, gParam.BUY_INTERVAL_DAY)
-                    else:
-                        if room.tradeProcess.tradeStep >= len(room.tradeProcess.sellOutRate):
-                            room.tradeProcess.changeType(context, gParam.PROCESS_SELL_DONE)
-                        else:
-                            room.tradeProcess.stepStart = GetDayTimeStamp(context.current_dt, gParam.SELL_INTERVAL_DAY)
-                    room.tradeOrder = None
-                else:
-                    # 有未成交的情况，下一个交易日继续交易
-                    if cur_order.is_buy:
-                        room.tradeOrder.status = gParam.ORDER_REBUY
-                    else:
-                        room.tradeOrder.status = gParam.ORDER_RESELL
-                    room.tradeOrder.stockCount = cur_order.amount - cur_order.filled
+  # 更新持股数
+  # 当天没完成的订单，根据订单状态，回滚数据
+  for room in g.tradeManager.rooms:
+    if context.subportfolios[0].positions.has_key(room.id):
+      position = context.subportfolios[0].positions[room.id]
+      room.stockCount = position.total_amount
+
+    if room.tradeOrder != None:
+      ordersDic = get_orders(order_id=room.tradeOrder.id)
+      if ordersDic.has_key(room.tradeOrder.id):
+        cur_order = ordersDic[room.tradeOrder.id]
+        if cur_order.is_buy:
+          room.cashLeft -= cur_order.filled * cur_order.price
+          if room.cashLeft < 0:
+            room.cashLeft = 0
+        if cur_order.amount == cur_order.filled:
+          # 全部成交，进入下一个阶段或者状态
+          room.tradeProcess.tradeStep += 1
+          if cur_order.is_buy:
+            if room.tradeProcess.tradeStep >= len(room.tradeProcess.buyInRate):
+              room.tradeProcess.changeType(context, gParam.PROCESS_BUY_DONE)
             else:
-                log.info("order not found after trading end, stockid={0}, orderid={1}".format(room.id, room.tradeOrder.id))
+              room.tradeProcess.stepStart = GetDayTimeStamp(context.current_dt, gParam.BUY_INTERVAL_DAY)
+          else:
+            if room.tradeProcess.tradeStep >= len(room.tradeProcess.sellOutRate):
+              room.tradeProcess.changeType(context, gParam.PROCESS_SELL_DONE)
+            else:
+              room.tradeProcess.stepStart = GetDayTimeStamp(context.current_dt, gParam.SELL_INTERVAL_DAY)
+          room.tradeOrder = None
+        else:
+          # 有未成交的情况，下一个交易日继续交易
+          if cur_order.is_buy:
+            room.tradeOrder.status = gParam.ORDER_REBUY
+          else:
+            room.tradeOrder.status = gParam.ORDER_RESELL
+          room.tradeOrder.stockCount = cur_order.amount - cur_order.filled
+      else:
+          log.info("order not found after trading end, stockid={0}, orderid={1}".format(room.id, room.tradeOrder.id))
 
 def after_code_changed(context):
-    log.info('after_code_changed run')
-    inner_initialize()
-    g.tradeManager = None # 销毁交易类，下次启动时重建
+  log.info('after_code_changed run')
+  inner_initialize()
+  g.tradeManager = None # 销毁交易类，下次启动时重建
 
