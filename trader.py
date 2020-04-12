@@ -175,8 +175,8 @@ class CalcKDJ(CalcCommon):
     min = self.GetMinPrice(kLine[:N])
 
     if max == gParam.ERR_DATA or min == gParam.ERR_DATA or min == max:
-      log.info("GetRSV error, min = err or max = err")
-      return
+      log.info("GetRSV error, min = {min}, max = {max}".format(min=min,max=max))
+      return gParam.ERR_DATA
 
     # print "max = {0}, min = {1}".format(max, min)
     rsv = (kLine[0].close - min) / (max - min) * float(100)
@@ -778,17 +778,22 @@ def before_trading_start(context):
         stockData.preKDJ_3 = calcKDJ.GetKDJ(stockData.klines[3:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
         stockData.preKDJ_2 = calcKDJ.GetKDJ(stockData.klines[2:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
         stockData.preKDJ_1 = calcKDJ.GetKDJ(stockData.klines[1:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+        stockData.preMacdDiff = calcMACD.GetDiff(stockData.klines)
+        # stockData.preMacdDiff_4 = calcMACD.GetDiff(stockData.klines)
+        # stockData.preMacdDiff_3 = calcMACD.GetDiff(stockData.klines)
+        # stockData.preMacdDiff_2 = calcMACD.GetDiff(stockData.klines)
+        stockData.preMacdDiff_1 = calcMACD.GetDiff(stockData.klines[1:])
         stockData.curRSI = stockData.preRSI
         stockData.curKDJ = stockData.preKDJ
-        curMacdDiff = calcMACD.GetDiff(stockData.klines)
+        stockData.curMacdDiff = stockData.preMacdDiff
         k_open = stockData.klines[0].open if len(stockData.klines) > 0 else 0
         k_close = stockData.klines[0].close if len(stockData.klines) > 0 else 0
         preDayOpen = klineList['open'][len(rowIndexList) - 1] if len(rowIndexList) > 0 else 0
         preDayClose = klineList['close'][len(rowIndexList) - 1] if len(rowIndexList) > 0 else 0
-        log.info("id = {id}, pub={publishDays}, pre_open={preDayOpen}, pre_close={preDayClose}, k_open={k_open}, k_close={k_close}, \n rsi = {rsi}, macd_diff={macd_diff}, k-4={pre_kdj4},k-3={pre_kdj3}, k-2={pre_kdj2}, k-1={pre_kdj1}, kdj = {kdj}"\
+        log.info("id = {id}, pub={publishDays}, pre_open={preDayOpen}, pre_close={preDayClose}, k_open={k_open}, k_close={k_close}, \n rsi = {rsi}, pre_macd_diff={pre_macd_diff}, macd_diff={macd_diff}, k-4={pre_kdj4},k-3={pre_kdj3}, k-2={pre_kdj2}, k-1={pre_kdj1}, kdj = {kdj}"\
         .format(id = stockData.id, publishDays = stockData.publishDays, k_open = k_open, \
         k_close = k_close, preDayOpen = preDayOpen, preDayClose = preDayClose, \
-        rsi = stockData.preRSI, macd_diff=curMacdDiff, kdj = stockData.preKDJ, pre_kdj4 = stockData.preKDJ_4, pre_kdj3 = stockData.preKDJ_3, \
+        rsi = stockData.preRSI, pre_macd_diff=stockData.preMacdDiff_1, macd_diff=stockData.preMacdDiff, kdj = stockData.preKDJ, pre_kdj4 = stockData.preKDJ_4, pre_kdj3 = stockData.preKDJ_3, \
         pre_kdj2 = stockData.preKDJ_2, pre_kdj1 = stockData.preKDJ_1))
 
         g.stockDatas[stock] = stockData
