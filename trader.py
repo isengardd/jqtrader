@@ -34,7 +34,9 @@ class TraderParam:
     self.BUY_INTERVAL_DAY = 7
     self.SELL_INTERVAL_DAY = 3
     self.SH_CODE = '000001.XSHG'
-    self.SH_DEAD_KDJ_LINE = 90.00  # 上证指数kdj超过这个数值，停止交易
+    self.SH_DEAD_KDJ_LINE = 90.00  # 上证指数kdj超过这个数值，停止交易，卖出所有持仓
+    self.SH_STOP_BUY_KDJ_LINE = 88.00 # 上证指数kdj超过这个数值，停止买入
+    self.ONE_STOCK_BUY_KDJ_LINE = 88.00 # 个股的kdj超过这个数值，停止买入
 
     self.BUY_IN_STEP_RATE = [1.00]# [0.30, 0.30, 0.40]
     self.SELL_OUT_STEP_RATE = [1.00]# [0.30, 0.50, 0.20]
@@ -49,7 +51,9 @@ class TraderParam:
     self.KDJ_PRE_MONTH_COUNT = 5 # KDJ月线缓存数
     self.KDJ_PRE_WEEK_COUNT = 5 # KDJ周线缓存数
     self.KDJ_PRE_DAY_COUNT = 5 # KDJ日线缓存数
+    self.KDJ_MONTH_AVG_COUNT = 10 # KDJ每日月均线缓存数（前X天的月KDJ列表,用于计算平均值）
     self.MACD_PRE_MONTH_COUNT = 2 # MACD月线缓存数
+    self.MACD_PRE_WEEK_COUNT = 2 # MACD周线缓存数
     # 枚举
     self.PROCESS_NONE = 0
     self.PROCESS_BUY = 1
@@ -255,12 +259,26 @@ class StockData:
     self.curKDJDay = float(0.00)
     self.kLineWeeks = [] # 周k线缓存
     self.preKDJWeeks = [float(0.00)] * gParam.KDJ_PRE_WEEK_COUNT
+    self.preMacdDiffWeeks = [float(0.00)] * gParam.MACD_PRE_WEEK_COUNT
     self.curKDJWeek = float(0.00)
     self.kLineMonths = [] # 月K线缓存
     self.preMacdDiffMonths = [float(0.00)] * gParam.MACD_PRE_MONTH_COUNT
     self.curMacdDiffMonth = float(0.00)
     self.preKDJMonths = [float(0.00)] * gParam.KDJ_PRE_MONTH_COUNT
     self.curKDJMonth = float(0.00)
+    self.kdjMonthAvgList = [float(0.00)] * gParam.KDJ_MONTH_AVG_COUNT # 实际操作中多缓存一天,减少重复计算,但是平均值只取前10天
+    self.kdjMonthAvg = float(0.00)
+
+  def preKDJMonthDiff(self, index):
+    if index == 0:
+      log.info("preKDJMonthDiff index can not be 0")
+      return 0
+    if index >= len(self.preKDJMonths):
+      log.info("preKDJMonthDiff index > len(preKDJMonths)")
+      return 0
+    if index == 1:
+      return self.curKDJMonth - self.preKDJMonths[1]
+    return self.preKDJMonths[index-1] - self.preKDJMonths[index]
 
 class TradeManager:   # 交易管理
     def __init__(self):
@@ -272,7 +290,7 @@ class TradeManager:   # 交易管理
 
     def hasEmptyRoom(self):
         return len(self.rooms) < self.MAX_ROOM
-    
+
     def run(self, context, data):
         recalcKDJ = False
         if self.runCount == 1:
@@ -287,8 +305,8 @@ class TradeManager:   # 交易管理
         self.runCount += 1
 
         shData = g.stockDatas[normalize_code(gParam.SH_CODE)]
-        calcRSI = CalcRSI()
         calcKDJ = CalcKDJ()
+        calcMACD = CalcMACD()
         if recalcKDJ:
             for stockId in g.securities:
                 if normalize_code(gParam.SH_CODE) == stockId:
@@ -302,15 +320,29 @@ class TradeManager:   # 交易管理
                 cur_price = data[stockId].avg
                 stockData = g.stockDatas[stockId]
                 if len(stockData.kLineMonths) > 0:
-                    if cur_price > stockData.kLineMonths[0].high:
-                        stockData.kLineMonths[0].high = cur_price
-                        
-                    elif cur_price < stockData.kLineMonths[0].low:
-                        stockData.kLineMonths[0].low = cur_price
-                    stockData.kLineMonths[0].close = cur_price
-                    stockData.curKDJMonth = calcKDJ.GetKDJ(stockData.kLineMonths, gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-            
-        if len(self.rooms) < g.MAX_ROOM and shData.curKDJMonth < gParam.SH_DEAD_KDJ_LINE-4.00:
+                  if cur_price > stockData.kLineMonths[0].high:
+                    stockData.kLineMonths[0].high = cur_price
+                  elif cur_price < stockData.kLineMonths[0].low:
+                    stockData.kLineMonths[0].low = cur_price
+                  stockData.kLineMonths[0].close = cur_price
+                  stockData.curKDJMonth = calcKDJ.GetKDJ(stockData.kLineMonths, gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+                  stockData.curMacdDiffMonth = calcMACD.GetDiff(stockData.kLineMonths)
+                if len(stockData.kLineWeeks) > 0:
+                  if cur_price > stockData.kLineWeeks[0].high:
+                    stockData.kLineWeeks[0].high = cur_price
+                  elif cur_price < stockData.kLineWeeks[0].low:
+                    stockData.kLineWeeks[0].low = cur_price
+                  stockData.kLineWeeks[0].close = cur_price
+                  stockData.curKDJWeek = calcKDJ.GetKDJ(stockData.kLineWeeks, gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+                  stockData.curMacdDiffWeek = calcMACD.GetDiff(stockData.kLineWeeks)
+                if len(stockData.kLineDays) > 0:
+                  if cur_price > stockData.kLineDays[0].high:
+                    stockData.kLineDays[0].high = cur_price
+                  elif cur_price < stockData.kLineDays[0].low:
+                    stockData.kLineDays[0].low = cur_price
+                    stockData.kLineDays[0].close = cur_price
+                  stockData.curKDJDay = calcKDJ.GetKDJ(stockData.kLineDays, gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+        if len(self.rooms) < g.MAX_ROOM and shData.curKDJMonth < gParam.SH_STOP_BUY_KDJ_LINE:
             # 席位未满,查找买入机会
             roomsId = [room.id for room in self.rooms]
             for stockId in g.securities:
@@ -334,26 +366,27 @@ class TradeManager:   # 交易管理
                     log.info("data error,id = {id} curKDJ = {curKDJ}".format(curKDJ = stockData.curKDJMonth, id = stockData.id))
                     continue
 
-                diff_4 = stockData.preKDJMonths[3] - stockData.preKDJMonths[4]
-                diff_3 = stockData.preKDJMonths[2] - stockData.preKDJMonths[3]
-                diff_2 = stockData.preKDJMonths[1] - stockData.preKDJMonths[2]
-                diff_1 = stockData.curKDJMonth - stockData.preKDJMonths[1]
-
+                monthDiff4 = stockData.preKDJMonthDiff(4)
+                monthDiff3 = stockData.preKDJMonthDiff(3)
+                monthDiff2 = stockData.preKDJMonthDiff(2)
+                monthDiff1 = stockData.preKDJMonthDiff(1)
+                monthMacdDiff = stockData.curMacdDiffMonth - stockData.preMacdDiffMonths[1]
                 # 1. 上市天数大于24个月
                 # 2. 如果kdj D值的月线上升，而且diff月线也上升，判定为可买入
                 # 3. 如果周线上涨，在日线底部反转点买入
-                if stockData.curKDJMonth < 70.00:
+                if stockData.curKDJMonth < gParam.ONE_STOCK_BUY_KDJ_LINE:
                   buyReason = 0
                   buyMsg = ""
-                  if diff_1 >= 0.5 and diff_2 < 0 and diff_3 < 0:
-                    buyReason = 1
-                    buyMsg = "diff_1 >= 0.5 and diff_2 < 0 and diff_3 < 0"
-                  elif diff_1 + diff_2 >= 0.5 and diff_2 > 0 and diff_2 < 0.5 and diff_3 < 0 and diff_4 < 0:
-                    buyReason = 2
-                    buyMsg = "diff_1 + diff_2 >= 0.5 and diff_2 > 0 and diff_2 < 0.5 and diff_3 < 0 and diff_4 < 0"
-                  elif diff_4 > 0 and diff_3 > 0 and diff_2 < 0 and diff_1 > 0.5:
-                    buyReason = 3
-                    buyMsg = "diff_4 > 0 and diff_3 > 0 and diff_2 < 0 and diff_1 > 0.5"
+                  if monthDiff1 > 0 and monthDiff2 < 0 and monthDiff3 < 0 and monthMacdDiff > 0:
+                    weekDiff2 = stockData.preKDJWeeks[1] - stockData.preKDJWeeks[2]
+                    weekDiff1 = stockData.curKDJWeek - stockData.preKDJWeeks[1]
+                    weekMacdDiff = stockData.curMacdDiffWeek - stockData.preMacdDiffWeeks[1]
+                    dayDiff1 = stockData.curKDJDay - stockData.preKDJDays[1]
+                    dayDiff2 = stockData.preKDJDays[1] - stockData.preKDJDays[2]
+                    dayDiff3 = stockData.preKDJDays[2] - stockData.preKDJDays[3]
+                    if True:
+                      buyReason = 1
+                      buyMsg = "monthDiff1 > 0 and monthDiff2 < 0 and monthDiff3 < 0 and monthMacdDiff > 0 and weekDiff1 > 0 and weekMacdDiff > 0"
                   if buyReason > 0:
                     # 符合买入条件，进入交易席位
                     newRoom = TradeRoom()
@@ -367,7 +400,7 @@ class TradeManager:   # 交易管理
                     self.rooms.append(newRoom)
                     log.info("enter room, stockid={stockid}, preKDJ_1={preKDJ_1}, curKDJ={curKDJ}, lockCash={lockCash}".format(stockid = stockData.id, preKDJ_1 = stockData.preKDJMonths[1], curKDJ = stockData.curKDJMonth, lockCash = roomCash))
                     log.info("buyReason: {buyReason}, buyMsg = {buyMsg}".format(buyReason = buyReason, buyMsg = buyMsg))
-                    log.info("diff4={diff_4}, diff3={diff_3}, diff2={diff_2}, diff1={diff_1}".format(diff_4 = diff_4, diff_3 = diff_3, diff_2 = diff_2, diff_1 = diff_1))
+                    log.info("monthDiff1={monthDiff1},monthMacdDiff={monthMacdDiff},weekDiff1={weekDiff1},dayDiff2={dayDiff2},dayDiff1={dayDiff1}".format(monthDiff1=monthDiff1,monthMacdDiff=monthMacdDiff,weekDiff1=weekDiff1,dayDiff2=dayDiff2,dayDiff1=dayDiff1))
                     if len(self.rooms) < g.MAX_ROOM:
                         continue
                     else:
@@ -520,31 +553,25 @@ class TradeRoom:    #交易席位
                 log.info("data error,id = {id} curKDJ = {curKDJ}".format(curKDJ=stockData.curKDJMonth, id=stockData.id))
                 return
 
-            diff_4 = stockData.preKDJMonths[3] - stockData.preKDJMonths[4]
-            diff_3 = stockData.preKDJMonths[2] - stockData.preKDJMonths[3]
-            diff_2 = stockData.preKDJMonths[1] - stockData.preKDJMonths[2]
-            diff_1 = stockData.curKDJMonth - stockData.preKDJMonths[1]
-
+            monthDiff4 = stockData.preKDJMonthDiff(4)
+            monthDiff3 = stockData.preKDJMonthDiff(3)
+            monthDiff2 = stockData.preKDJMonthDiff(2)
+            monthDiff1 = stockData.preKDJMonthDiff(1)
+            weekDiff1 = stockData.curKDJWeek - stockData.preKDJWeeks[1]
+            weekDiff2 = stockData.preKDJWeeks[1] - stockData.preKDJWeeks[2]
+            dayDiff1 = stockData.curKDJDay - stockData.preKDJDays[1]
+            dayDiff2 = stockData.preKDJDays[1] - stockData.preKDJDays[2]
             sellReason = 0
             sellMsg = ""
-            if diff_1 < -2:
+            # 高位反转，判定为卖出
+            if monthDiff1 < -1.5:
               sellReason = 1
-              sellMsg = "diff_1 < -2"
-            elif diff_1 < 0 and diff_2 < 0 and (diff_1 + diff_2 < -2):
-              sellReason = 2
-              sellMsg = "diff_1 < 0 and diff_2 < 0 and (diff_1 + diff_2 < -2)"
-            elif diff_1 < 0 and diff_2 < 0 and diff_3 < 0 and (diff_1 + diff_2 + diff_3 < -2):
-              sellReason = 3
-              sellMsg = "diff_1 < 0 and diff_2 < 0 and diff_3 < 0 and (diff_1 + diff_2 + diff_3 < -2)"
-            elif diff_1 < 0 and diff_2 < 0 and diff_3 < 0 and diff_4 < 0 and (diff_1 + diff_2 + diff_3 + diff_4 < -2):
-              sellReason = 4
-              sellMsg = "diff_1 < 0 and diff_2 < 0 and diff_3 < 0 and diff_4 < 0 and (diff_1 + diff_2 + diff_3 + diff_4 < -2)"
-
+              sellMsg = "weekDiff1 < -2"
             if sellReason > 0:
               self.tradeProcess.changeType(context, gParam.PROCESS_SELL)
               log.info("change to sell, stockid={stockid}, preKDJ_1={preKDJ_1}, curKDJ={curKDJ}".format(stockid = self.id, preKDJ_1 = stockData.preKDJMonths[1], curKDJ = stockData.curKDJMonth))
               log.info("sellReason: {sellReason}, Msg = {sellMsg}".format(sellReason = sellReason, sellMsg = sellMsg))
-              log.info("diff4={diff_4}, diff3={diff_3}, diff2={diff_2}, diff1={diff_1}".format(diff_4 = diff_4, diff_3 = diff_3, diff_2 = diff_2, diff_1 = diff_1))
+              log.info("weekDiff1={weekDiff1}".format(weekDiff1=weekDiff1))
         # 卖出单独判断
         if self.tradeProcess.tradeType == gParam.PROCESS_SELL:
             if self.tradeOrder == None:
@@ -647,7 +674,6 @@ def handle_data(context, data):
 def before_trading_start(context):
     # 初始化 rsi 和 kdj 数据
     timeRecord = TimeRecord()
-    calcRSI = CalcRSI()
     calcKDJ = CalcKDJ()
     calcMACD = CalcMACD()
     # 初始化全局参数
@@ -680,6 +706,7 @@ def before_trading_start(context):
     log.info("len(tradeManager.rooms) = {0}".format(len(g.tradeManager.rooms)))
     log.info("daytime: {0}".format(context.current_dt.strftime("%Y-%m-%d")))
     g.tradeManager.runCount = 0 # 重置一下每日执行次数
+    preGStockDatas = g.stockDatas if hasattr(g, "stockDatas") else None # 缓存一下前一天的数据，仅在测试环境使用
     g.stockDatas = dict.fromkeys(g.securities)
     for stock in g.securities:
         # 这里取k线柱状图的数据，有一个问题：
@@ -717,123 +744,169 @@ def before_trading_start(context):
 
         #print klineList._stat_axis.values.tolist()  # 取行名称
         # columns.values.tolist()   # 取列名称
-        stockData = StockData()
-        stockData.id = stock
-        for idx in range(len(rowIndexList)-1, -1, -1):
-          if numpy.isnan(klineList['open'][idx]) or len(rowIndexList)-1-idx >= gParam.MIN_PUBLISH_DAYS:
-            break
-        stockData.publishDays = len(rowIndexList)-1-idx
-        if stockData.publishDays < gParam.MIN_PUBLISH_DAYS:
+        publishDays = getStockPublishDay(rowIndexList, klineList)
+        if publishDays < gParam.MIN_PUBLISH_DAYS:
+          stockData = StockData()
+          stockData.id = stock
+          stockData.publishDays = publishDays
           g.stockDatas[stock] = stockData
           continue
-        # 按自然月和周划分k线柱
-        kLineMonth = KLineBar() # 每月至少取满20个交易日的数据，如果当前属于月份初，则取上月数据填补
-        kLineWeek = KLineBar() # 每周至少取满5个交易日数据，不足的部分从上周数据填补
-        kLineDay = KLineBar()
-        kLineMonthHaveDay = 0
-        preKLineMonthHaveDay = 0
-        kLineWeekHaveDay = 0
-        preKLineWeekHaveDay = 0
-        #print(len(klineList._stat_axis.values.tolist()))
-        # 从昨日开始往前遍历数据
-        for idx in range(len(rowIndexList)-1, -1, -1):
-            if numpy.isnan(klineList['open'][idx]):
-                # 已经取到未上市的日期，后面的不再取了
-                if kLineMonth != None:
-                    stockData.kLineMonths.append(kLineMonth)
-                if kLineWeek != None:
-                    stockData.kLineWeeks.append(kLineWeek)
-                if kLineDay != None:
-                    stockData.kLineDays.append(kLineDay)
-                break
-            time_date = rowIndexList[idx]
-            pre_timedate = time_date
-            if idx > 0:
-                pre_timedate = rowIndexList[idx - 1]
-            # 跨月，而且上月有数据，结算上一个k线图数据
-            if time_date.month != pre_timedate.month and kLineMonthHaveDay > 0:
-              stockData.kLineMonths.append(kLineMonth)
-              preKLineMonthHaveDay = kLineMonthHaveDay
-              kLineMonthHaveDay = 0
-              kLineMonth = None
-            # 跨周，而且上周有数据
-            if time_date.isocalendar()[1] != pre_timedate.isocalendar()[1] and kLineWeekHaveDay > 0:
-              stockData.kLineWeeks.append(kLineWeek)
-              preKLineWeekHaveDay = kLineWeekHaveDay
-              kLineWeekHaveDay = 0
-              kLineWeek = None
-            # 每天都是跨天
-            kLineDay = None
-            if kLineMonth == None:
-                kLineMonth = KLineBar()
-                kLineMonthHaveDay = 0
-            if kLineWeek == None and len(stockData.kLineWeeks) < gParam.KLINE_LENGTH:
-                kLineWeek = KLineBar()
-                kLineWeekHaveDay = 0
-            if kLineDay == None and len(stockData.kLineDays) < gParam.KLINE_LENGTH:
-                kLineDay = KLineBar()
-
-            k_open = klineList['open'][idx]
-            k_close = klineList['close'][idx]
-            k_high = klineList['high'][idx]
-            k_low = klineList['low'][idx]
-            # 更新本月数据
-            kLineMonth.UpdatePreDayData(k_open, k_close, k_high, k_low)
-            kLineMonthHaveDay += 1
-            # 上月数据不足，补充上月数据
-            if preKLineMonthHaveDay < 30 and len(stockData.kLineMonths) > 0:
-              preKlineMonth = stockData.kLineMonths[-1]
-              preKlineMonth.UpdatePreDayData(k_open, k_close, k_high, k_low)
-              preKLineMonthHaveDay += 1
-            # 更新本周数据
-            if kLineWeek != None:
-              kLineWeek.UpdatePreDayData(k_open, k_close, k_high, k_low)
-              kLineWeekHaveDay += 1
-            # 上周数据不足，补充上周数据
-            if preKLineWeekHaveDay < 5 and len(stockData.kLineWeeks) > 0:
-              preKlineWeek = stockData.kLineWeeks[-1]
-              preKlineWeek.UpdatePreDayData(k_open, k_close, k_high, k_low)
-              preKLineWeekHaveDay += 1
-            # 更新日数据
-            if kLineDay != None:
-              kLineDay.UpdatePreDayData(k_open, k_close, k_high, k_low)
-              stockData.kLineDays.append(kLineDay)
-
-        if len(stockData.kLineMonths) < gParam.KLINE_LENGTH and len(stockData.kLineMonths) > 0:
-            lastKline = stockData.kLineMonths[-1]
-            for i in range(gParam.KLINE_LENGTH - len(stockData.kLineMonths)):
-                kLineMonth = KLineBar()
-                kLineMonth.open = lastKline.open
-                kLineMonth.close = lastKline.close
-                kLineMonth.high = lastKline.high
-                kLineMonth.low = lastKline.low
-                stockData.kLineMonths.append(kLineMonth)
-
-        # Month
-        for n in range(gParam.KDJ_PRE_MONTH_COUNT):
-          stockData.preKDJMonths[n] = calcKDJ.GetKDJ(stockData.kLineMonths[n:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-        for n in range(gParam.MACD_PRE_MONTH_COUNT):
-          stockData.preMacdDiffMonths[n] = calcMACD.GetDiff(stockData.kLineMonths[n:])
-        stockData.curKDJMonth = stockData.preKDJMonths[0]
-        stockData.curMacdDiffMonth = stockData.preMacdDiffMonths[0]
-        # week
-        for n in range(gParam.KDJ_PRE_WEEK_COUNT):
-          stockData.preKDJWeeks[n] = calcKDJ.GetKDJ(stockData.kLineWeeks[n:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-        stockData.curKDJWeek = stockData.preKDJWeeks[0]
-        # day
-        for n in range(gParam.KDJ_PRE_DAY_COUNT):
-          stockData.preKDJDays[n] = calcKDJ.GetKDJ(stockData.kLineDays[n:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
-        stockData.curKDJDay = stockData.preKDJDays[0]
-
+        stockData = calcStockData(stock, rowIndexList, klineList, -1)
+        stockData.publishDays = publishDays
+        if gParam.PRODUCT:
+          stockData.kdjMonthAvg = getKDJAvg(rowIndexList, klineList, gParam.KDJ_MONTH_AVG_COUNT)
+        else:
+          # 测试环境使用缓存的数据计算平均值, todo: 这里没有缓存上
+          preGStockData = preGStockDatas[stock] if preGStockDatas and preGStockDatas.has_key(stock) else None
+          if preGStockData == None or preGStockData.kdjMonthAvg <= float(0.001):
+            # 这里取逆序
+            for preDayIndex in range(gParam.KDJ_MONTH_AVG_COUNT-1, -1, -1):
+              preDayStockData = initStockKlineBar(stock, rowIndexList, klineList, -2 - preDayIndex)
+              preDayStockData.preKDJMonths[0] = calcKDJ.GetKDJ(preDayStockData.kLineMonths, gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+              stockData.kdjMonthAvgList[gParam.KDJ_MONTH_AVG_COUNT - preDayIndex - 1] = preDayStockData.preKDJMonths[0]
+            stockData.kdjMonthAvg = sum(stockData.kdjMonthAvgList[:gParam.KDJ_MONTH_AVG_COUNT]) / gParam.KDJ_MONTH_AVG_COUNT
+            stockData.kdjMonthAvgList.append(stockData.preKDJMonths[0]) # 把昨日的也缓存起来，省一次计算
+          else:
+            stockData.kdjMonthAvgList = preGStockData.kdjMonthAvgList[1:]
+            stockData.kdjMonthAvgList.append(stockData.preKDJMonths[0])
+            stockData.kdjMonthAvg = sum(stockData.kdjMonthAvgList[:gParam.KDJ_MONTH_AVG_COUNT]) / gParam.KDJ_MONTH_AVG_COUNT
         preDayOpen = klineList['open'][len(rowIndexList) - 1] if len(rowIndexList) > 0 else 0
         preDayClose = klineList['close'][len(rowIndexList) - 1] if len(rowIndexList) > 0 else 0
-        log.info("id = {id}, pub={publishDays}, pre_open={preDayOpen}, pre_close={preDayClose} \n pre_macd_diff_m={pre_macd_diff_m}, macd_diff_m={macd_diff_m}, k-4={pre_kdj4},k-3={pre_kdj3}, k-2={pre_kdj2}, k-1={pre_kdj1}, kdj_m = {kdj_m}, kdj_w = {kdj_w}, kdj_d = {kdj_d}"\
+        log.info("id = {id}, pub={publishDays}, pre_open={preDayOpen}, pre_close={preDayClose} \n pre_macd_diff_m={pre_macd_diff_m}, macd_diff_m={macd_diff_m}, pre_macd_diff_w={pre_macd_diff_w}, macd_diff_w={macd_diff_w}, k-4={pre_kdj4},k-3={pre_kdj3}, k-2={pre_kdj2}, k-1={pre_kdj1}, kdj_m = {kdj_m}, kdj_day_mavg = {kdj_day_mavg}, kdj_w = {kdj_w}, kdj_d = {kdj_d}"\
         .format(id = stockData.id, publishDays = stockData.publishDays, \
-        preDayOpen = preDayOpen, preDayClose = preDayClose, \
-        pre_macd_diff_m=stockData.preMacdDiffMonths[1], macd_diff_m=stockData.preMacdDiffMonths[0], kdj_m = stockData.preKDJMonths[0], pre_kdj4 = stockData.preKDJMonths[4], pre_kdj3 = stockData.preKDJMonths[3], \
+        preDayOpen = preDayOpen, preDayClose = preDayClose, pre_macd_diff_w=stockData.preMacdDiffWeeks[1], macd_diff_w=stockData.preMacdDiffWeeks[0],\
+        pre_macd_diff_m=stockData.preMacdDiffMonths[1], macd_diff_m=stockData.preMacdDiffMonths[0], kdj_m = stockData.preKDJMonths[0], kdj_day_mavg = stockData.kdjMonthAvg, pre_kdj4 = stockData.preKDJMonths[4], pre_kdj3 = stockData.preKDJMonths[3], \
         pre_kdj2 = stockData.preKDJMonths[2], pre_kdj1 = stockData.preKDJMonths[1], kdj_w = stockData.preKDJWeeks[0], kdj_d = stockData.preKDJDays[0]))
 
         g.stockDatas[stock] = stockData
+
+# 获取KDJ前X日的当月平均, 从前天开始
+def getKDJAvg(rowIndexList, klineList, count):
+  if count == 0:
+    return 0
+  sumVal = 0.00
+  for idx in range(count):
+    stockData = calcStockData(0, rowIndexList, klineList, -2 - idx)
+    sumVal += stockData.preKDJMonths[0]
+  return sumVal / float(count)
+
+# start = -1代表昨日， -2 为前天， 以此类推， 返回的是start当天的数据
+def getStockPublishDay(rowIndexList, klineList):
+  for idx in range(len(rowIndexList)-1, -1, -1):
+    if numpy.isnan(klineList['open'][idx]) or len(rowIndexList)-1-idx >= gParam.MIN_PUBLISH_DAYS:
+      break
+  return len(rowIndexList)-1-idx
+
+def calcStockData(stockId, rowIndexList, klineList, start):
+  calcKDJ = CalcKDJ()
+  calcMACD = CalcMACD()
+  stockData = initStockKlineBar(stockId, rowIndexList, klineList, start)
+  # Month
+  for n in range(gParam.KDJ_PRE_MONTH_COUNT):
+    stockData.preKDJMonths[n] = calcKDJ.GetKDJ(stockData.kLineMonths[n:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+  for n in range(gParam.MACD_PRE_MONTH_COUNT):
+    stockData.preMacdDiffMonths[n] = calcMACD.GetDiff(stockData.kLineMonths[n:])
+  stockData.curKDJMonth = stockData.preKDJMonths[0]
+  stockData.curMacdDiffMonth = stockData.preMacdDiffMonths[0]
+  # week
+  for n in range(gParam.KDJ_PRE_WEEK_COUNT):
+    stockData.preKDJWeeks[n] = calcKDJ.GetKDJ(stockData.kLineWeeks[n:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+  for n in range(gParam.MACD_PRE_WEEK_COUNT):
+    stockData.preMacdDiffWeeks[n] = calcMACD.GetDiff(stockData.kLineWeeks[n:])
+  stockData.curKDJWeek = stockData.preKDJWeeks[0]
+  stockData.curMacdDiffWeek = stockData.preMacdDiffWeeks[0]
+  # day
+  for n in range(gParam.KDJ_PRE_DAY_COUNT):
+    stockData.preKDJDays[n] = calcKDJ.GetKDJ(stockData.kLineDays[n:], gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+  stockData.curKDJDay = stockData.preKDJDays[0]
+  return stockData
+
+def initStockKlineBar(stockId, rowIndexList, klineList, start):
+  stockData = StockData()
+  stockData.id = stockId
+  # 按自然月和周划分k线柱
+  kLineMonth = KLineBar()
+  kLineWeek = KLineBar()
+  kLineDay = KLineBar()
+  kLineMonthHaveDay = 0
+  preKLineMonthHaveDay = 0
+  kLineWeekHaveDay = 0
+  preKLineWeekHaveDay = 0
+  #print(len(klineList._stat_axis.values.tolist()))
+  # 从昨日开始往前遍历数据
+  for idx in range(len(rowIndexList)+start, -1, -1):
+      if numpy.isnan(klineList['open'][idx]):
+          # 已经取到未上市的日期，后面的不再取了
+          if kLineMonth != None:
+              stockData.kLineMonths.append(kLineMonth)
+          if kLineWeek != None:
+              stockData.kLineWeeks.append(kLineWeek)
+          if kLineDay != None:
+              stockData.kLineDays.append(kLineDay)
+          break
+      time_date = rowIndexList[idx]
+      pre_timedate = time_date
+      if idx > 0:
+          pre_timedate = rowIndexList[idx - 1]
+      # 跨月，而且上月有数据，结算上一个k线图数据
+      if time_date.month != pre_timedate.month and kLineMonthHaveDay > 0:
+        stockData.kLineMonths.append(kLineMonth)
+        preKLineMonthHaveDay = kLineMonthHaveDay
+        kLineMonthHaveDay = 0
+        kLineMonth = None
+      # 跨周，而且上周有数据
+      if time_date.isocalendar()[1] != pre_timedate.isocalendar()[1] and kLineWeekHaveDay > 0:
+        stockData.kLineWeeks.append(kLineWeek)
+        preKLineWeekHaveDay = kLineWeekHaveDay
+        kLineWeekHaveDay = 0
+        kLineWeek = None
+      # 每天都是跨天
+      kLineDay = None
+      if kLineMonth == None:
+          kLineMonth = KLineBar()
+          kLineMonthHaveDay = 0
+      if kLineWeek == None and len(stockData.kLineWeeks) < gParam.KLINE_LENGTH:
+          kLineWeek = KLineBar()
+          kLineWeekHaveDay = 0
+      if kLineDay == None and len(stockData.kLineDays) < gParam.KLINE_LENGTH:
+          kLineDay = KLineBar()
+
+      k_open = klineList['open'][idx]
+      k_close = klineList['close'][idx]
+      k_high = klineList['high'][idx]
+      k_low = klineList['low'][idx]
+      # 更新本月数据
+      kLineMonth.UpdatePreDayData(k_open, k_close, k_high, k_low)
+      kLineMonthHaveDay += 1
+      # 上月数据不足，补充上月数据
+      if preKLineMonthHaveDay < 30 and len(stockData.kLineMonths) > 0:
+        preKlineMonth = stockData.kLineMonths[-1]
+        preKlineMonth.UpdatePreDayData(k_open, k_close, k_high, k_low)
+        preKLineMonthHaveDay += 1
+      # 更新本周数据
+      if kLineWeek != None:
+        kLineWeek.UpdatePreDayData(k_open, k_close, k_high, k_low)
+        kLineWeekHaveDay += 1
+      # 上周数据不足，补充上周数据
+      if preKLineWeekHaveDay < 7 and len(stockData.kLineWeeks) > 0:
+        preKlineWeek = stockData.kLineWeeks[-1]
+        preKlineWeek.UpdatePreDayData(k_open, k_close, k_high, k_low)
+        preKLineWeekHaveDay += 1
+      # 更新日数据
+      if kLineDay != None:
+        kLineDay.UpdatePreDayData(k_open, k_close, k_high, k_low)
+        stockData.kLineDays.append(kLineDay)
+
+  if len(stockData.kLineMonths) < gParam.KLINE_LENGTH and len(stockData.kLineMonths) > 0:
+      lastKline = stockData.kLineMonths[-1]
+      for i in range(gParam.KLINE_LENGTH - len(stockData.kLineMonths)):
+          kLineMonth = KLineBar()
+          kLineMonth.open = lastKline.open
+          kLineMonth.close = lastKline.close
+          kLineMonth.high = lastKline.high
+          kLineMonth.low = lastKline.low
+          stockData.kLineMonths.append(kLineMonth)
+  return stockData
 
 def after_trading_end(context):
   # 更新持股数
