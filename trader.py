@@ -873,6 +873,8 @@ def initStockKlineBar(stockId, rowIndexList, klineList, start):
   kLineMonth = KLineBar()
   kLineWeek = KLineBar()
   kLineDay = KLineBar()
+  firstMonth = True # 首月和上月合并
+  firstWeek = True
   #print(len(klineList._stat_axis.values.tolist()))
   # 从昨日开始往前遍历数据
   for idx in range(len(rowIndexList)+start, -1, -1):
@@ -892,12 +894,18 @@ def initStockKlineBar(stockId, rowIndexList, klineList, start):
           pre_timedate = rowIndexList[idx + 1]
       # 跨月，而且上月有数据，结算上一个k线图数据
       if time_date.month != pre_timedate.month and kLineMonth.day > 0:
-        stockData.kLineMonths.append(kLineMonth)
-        kLineMonth = None
+        if firstMonth:
+          firstMonth = False
+        else:
+          stockData.kLineMonths.append(kLineMonth)
+          kLineMonth = None
       # 跨周，而且上周有数据
       if time_date.isocalendar()[1] != pre_timedate.isocalendar()[1] and kLineWeek and kLineWeek.day > 0:
-        stockData.kLineWeeks.append(kLineWeek)
-        kLineWeek = None
+        if firstWeek:
+          firstWeek = False
+        else:
+          stockData.kLineWeeks.append(kLineWeek)
+          kLineWeek = None
       # 每天都是跨天
       kLineDay = None
       if kLineMonth == None:
