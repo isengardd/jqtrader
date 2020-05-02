@@ -51,7 +51,7 @@ class TraderParam:
     self.KDJ_PRE_MONTH_COUNT = 5 # KDJ月线缓存数
     self.KDJ_PRE_WEEK_COUNT = 5 # KDJ周线缓存数
     self.KDJ_PRE_DAY_COUNT = 5 # KDJ日线缓存数
-    self.KDJ_MONTH_AVG_COUNT = 30 # KDJ每日月均线缓存数（前X天的月KDJ列表,用于计算平均值）
+    self.KDJ_MONTH_AVG_COUNT = 40 # KDJ每日月均线缓存数（前X天的月KDJ列表,用于计算平均值）
     self.MACD_PRE_MONTH_COUNT = 2 # MACD月线缓存数
     self.MACD_PRE_WEEK_COUNT = 2 # MACD周线缓存数
     # 枚举
@@ -429,7 +429,7 @@ class TradeManager:   # 交易管理
                   # if monthDiff1 > 0 and monthDiff2 < 0 and monthDiff3 < 0 and monthMacdDiff > 0:
                   #   buyReason = 1
                   #   buyMsg = "monthDiff1 > 0 and monthDiff2 < 0 and monthDiff3 < 0 and monthMacdDiff > 0 and weekDiff1 > 0 and weekMacdDiff > 0"
-                  if shData.kdjMonthAvg > shData.preKDJMonths[1] and stockData.curKDJMonth > stockData.kdjMonthAvg + 0.3:
+                  if monthMacdDiff > 0 and stockData.curKDJMonth > stockData.kdjMonthAvg + 0.3:
                     buyReason = 2
                     buyMsg = "shData.kdjMonthAvg > shData.preKDJMonths[1] and stockData.curKDJMonth > stockData.kdjMonthAvg + 0.3"
                   if buyReason > 0:
@@ -609,12 +609,9 @@ class TradeRoom:    #交易席位
             sellReason = 0
             sellMsg = ""
             # 高位反转，判定为卖出
-            # if stockData.curKDJMonth < stockData.kdjMonthAvg - 0.50:
-            #   sellReason = 1
-            #   sellMsg = "stockData.curKDJMonth < stockData.kdjMonthAvg - 0.50"
-            if sellReason == 0 and shData.kdjMonthAvg < shData.preKDJMonths[1]:
-              sellReason = 2
-              sellMsg = "shData.kdjMonthAvg < shData.preKDJMonths[1]"
+            if stockData.curKDJMonth < stockData.kdjMonthAvg - 0.50:
+              sellReason = 1
+              sellMsg = "stockData.curKDJMonth < stockData.kdjMonthAvg - 0.50"
             if sellReason > 0:
               self.tradeProcess.changeType(context, gParam.PROCESS_SELL)
               log.info("change to sell, stockid={stockid}, preKDJ_1={preKDJ_1}, curKDJ={curKDJ}".format(stockid = self.id, preKDJ_1 = stockData.preKDJMonths[1], curKDJ = stockData.curKDJMonth))
