@@ -355,9 +355,9 @@ class TradeManager:   # 交易管理
         calcMACD = CalcMACD()
         if recalcKDJ:
             for stockId in g.securities:
-                if normalize_code(gParam.SH_CODE) == stockId:
-                    continue
-                
+                # if normalize_code(gParam.SH_CODE) == stockId:
+                #     continue
+
                 if data[stockId].paused == True:
                     continue
 
@@ -426,12 +426,12 @@ class TradeManager:   # 交易管理
                 if stockData.curKDJMonth < gParam.ONE_STOCK_BUY_KDJ_LINE:
                   buyReason = 0
                   buyMsg = ""
-                  if monthDiff1 > 0 and monthDiff2 < 0 and monthDiff3 < 0 and monthMacdDiff > 0:
-                    buyReason = 1
-                    buyMsg = "monthDiff1 > 0 and monthDiff2 < 0 and monthDiff3 < 0 and monthMacdDiff > 0 and weekDiff1 > 0 and weekMacdDiff > 0"
-                  elif monthMacdDiff > 0 and stockData.curKDJMonth > stockData.kdjMonthAvg + 0.3:
+                  # if monthDiff1 > 0 and monthDiff2 < 0 and monthDiff3 < 0 and monthMacdDiff > 0:
+                  #   buyReason = 1
+                  #   buyMsg = "monthDiff1 > 0 and monthDiff2 < 0 and monthDiff3 < 0 and monthMacdDiff > 0 and weekDiff1 > 0 and weekMacdDiff > 0"
+                  if shData.kdjMonthAvg > shData.preKDJMonths[1] and stockData.curKDJMonth > stockData.kdjMonthAvg + 0.3:
                     buyReason = 2
-                    buyMsg = "monthMacdDiff > 0 and stockData.curKDJMonth > stockData.kdjMonthAvg + 0.3"
+                    buyMsg = "shData.kdjMonthAvg > shData.preKDJMonths[1] and stockData.curKDJMonth > stockData.kdjMonthAvg + 0.3"
                   if buyReason > 0:
                     # 符合买入条件，进入交易席位
                     newRoom = TradeRoom()
@@ -609,9 +609,12 @@ class TradeRoom:    #交易席位
             sellReason = 0
             sellMsg = ""
             # 高位反转，判定为卖出
-            if stockData.curKDJMonth < stockData.kdjMonthAvg - 0.50:
-              sellReason = 1
-              sellMsg = "stockData.curKDJMonth < stockData.kdjMonthAvg - 1.50"
+            # if stockData.curKDJMonth < stockData.kdjMonthAvg - 0.50:
+            #   sellReason = 1
+            #   sellMsg = "stockData.curKDJMonth < stockData.kdjMonthAvg - 0.50"
+            if sellReason == 0 and shData.kdjMonthAvg < shData.preKDJMonths[1]:
+              sellReason = 2
+              sellMsg = "shData.kdjMonthAvg < shData.preKDJMonths[1]"
             if sellReason > 0:
               self.tradeProcess.changeType(context, gParam.PROCESS_SELL)
               log.info("change to sell, stockid={stockid}, preKDJ_1={preKDJ_1}, curKDJ={curKDJ}".format(stockid = self.id, preKDJ_1 = stockData.preKDJMonths[1], curKDJ = stockData.curKDJMonth))
