@@ -34,9 +34,9 @@ class TraderParam:
     self.BUY_INTERVAL_DAY = 1
     self.SELL_INTERVAL_DAY = 1
     self.SH_CODE = '000001.XSHG'
-    self.SH_DEAD_KDJ_LINE = 90.00  # 上证指数kdj超过这个数值，停止交易，卖出所有持仓
-    self.SH_STOP_BUY_KDJ_LINE = 88.00 # 上证指数kdj超过这个数值，停止买入
-    self.ONE_STOCK_BUY_KDJ_LINE = 88.00 # 个股的kdj超过这个数值，停止买入
+    self.SH_DEAD_KDJ_LINE = 75.00  # 上证指数kdj超过这个数值，停止交易，卖出所有持仓
+    self.SH_STOP_BUY_KDJ_LINE = 73.00 # 上证指数kdj超过这个数值，停止买入
+    self.ONE_STOCK_BUY_KDJ_LINE = 85.00 # 个股的kdj超过这个数值，停止买入
 
     self.BUY_IN_STEP_RATE = [1.00]# [0.30, 0.30, 0.40]
     self.SELL_OUT_STEP_RATE = [1.00]# [0.30, 0.50, 0.20]
@@ -54,6 +54,9 @@ class TraderParam:
     self.KDJ_MONTH_AVG_COUNT = 40 # KDJ每日月均线缓存数（前X天的月KDJ列表,用于计算平均值）
     self.MACD_PRE_MONTH_COUNT = 2 # MACD月线缓存数
     self.MACD_PRE_WEEK_COUNT = 2 # MACD周线缓存数
+    # k线参数
+    self.KLINE_BAR_MONTH_DAY = 40 # k线月线的天数
+    self.KLINE_BAR_WEEK_DAY = 5 # k线周线的天数
     # 枚举
     self.PROCESS_NONE = 0
     self.PROCESS_BUY = 1
@@ -64,6 +67,19 @@ class TraderParam:
     self.ORDER_REBUY = 1
     self.ORDER_RESELL = 2
 
+    self.securities = [
+    self.SH_CODE, # 上证指数也考虑进来
+    '601988','000538','000002','600642',
+    '600104','601633','000895','600660',
+    '600690','000568','600031','600320',
+    '601933','002415','600763','000651',
+    '603288','600276','002294',
+    '600887','600030','601668',
+    '601919','000725','002352','601628',
+    '601319','002797'
+    ] if self.PRODUCT else [
+      self.SH_CODE, '600763'
+    ]
 gParam = TraderParam()
 
 def LowStockCount(num):
@@ -429,7 +445,7 @@ class TradeManager:   # 交易管理
                   # if monthDiff1 > 0 and monthDiff2 < 0 and monthDiff3 < 0 and monthMacdDiff > 0:
                   #   buyReason = 1
                   #   buyMsg = "monthDiff1 > 0 and monthDiff2 < 0 and monthDiff3 < 0 and monthMacdDiff > 0 and weekDiff1 > 0 and weekMacdDiff > 0"
-                  if monthMacdDiff > 0 and stockData.curKDJMonth > stockData.kdjMonthAvg + 0.3:
+                  if monthMacdDiff > 0 and stockData.curKDJMonth > stockData.kdjMonthAvg + 2:
                     buyReason = 2
                     buyMsg = "shData.kdjMonthAvg > shData.preKDJMonths[1] and stockData.curKDJMonth > stockData.kdjMonthAvg + 0.3"
                   if buyReason > 0:
@@ -609,7 +625,7 @@ class TradeRoom:    #交易席位
             sellReason = 0
             sellMsg = ""
             # 高位反转，判定为卖出
-            if stockData.curKDJMonth < stockData.kdjMonthAvg - 0.50:
+            if stockData.curKDJMonth < stockData.kdjMonthAvg - 4.50:
               sellReason = 1
               sellMsg = "stockData.curKDJMonth < stockData.kdjMonthAvg - 0.50"
             if sellReason > 0:
@@ -689,17 +705,7 @@ class TradeOrder:   #交易订单
 def inner_initialize():
     gParam = TraderParam()
     # 定义一个全局变量, 保存要操作的股票
-    securities = [
-    gParam.SH_CODE, # 上证指数也考虑进来
-    '601988','000538','000002','600642',
-    '600104','601633','000895','600660',
-    '600690','000568','600031','600320',
-    '601933','002415','600763','000651',
-    '603288','600276','002294',
-    '600887','600030','601668',
-    '601919','000725','002352','601628',
-    '601319','002797'
-    ]
+    securities = gParam.securities
     g.securities = [normalize_code(x) for x in securities]
     set_universe(g.securities)
     
@@ -837,6 +843,8 @@ def getKDJAvg(rowIndexList, klineList, count):
 
 # start = -1代表昨日， -2 为前天， 以此类推， 返回的是start当天的数据
 def getStockPublishDay(rowIndexList, klineList):
+  if len(rowIndexList) == 0:
+    return 0
   for idx in range(len(rowIndexList)-1, -1, -1):
     if numpy.isnan(klineList['open'][idx]) or len(rowIndexList)-1-idx >= gParam.MIN_PUBLISH_DAYS:
       break
@@ -873,8 +881,6 @@ def initStockKlineBar(stockId, rowIndexList, klineList, start):
   kLineMonth = KLineBar()
   kLineWeek = KLineBar()
   kLineDay = KLineBar()
-  firstMonth = True # 首月和上月合并
-  firstWeek = True
   #print(len(klineList._stat_axis.values.tolist()))
   # 从昨日开始往前遍历数据
   for idx in range(len(rowIndexList)+start, -1, -1):
@@ -893,19 +899,13 @@ def initStockKlineBar(stockId, rowIndexList, klineList, start):
           # 这里取下一天的比较
           pre_timedate = rowIndexList[idx + 1]
       # 跨月，而且上月有数据，结算上一个k线图数据
-      if time_date.month != pre_timedate.month and kLineMonth.day > 0:
-        if firstMonth:
-          firstMonth = False
-        else:
-          stockData.kLineMonths.append(kLineMonth)
-          kLineMonth = None
+      if kLineMonth.day >= gParam.KLINE_BAR_MONTH_DAY:
+        stockData.kLineMonths.append(kLineMonth)
+        kLineMonth = None
       # 跨周，而且上周有数据
-      if time_date.isocalendar()[1] != pre_timedate.isocalendar()[1] and kLineWeek and kLineWeek.day > 0:
-        if firstWeek:
-          firstWeek = False
-        else:
-          stockData.kLineWeeks.append(kLineWeek)
-          kLineWeek = None
+      if kLineWeek and kLineWeek.day >= gParam.KLINE_BAR_WEEK_DAY:
+        stockData.kLineWeeks.append(kLineWeek)
+        kLineWeek = None
       # 每天都是跨天
       kLineDay = None
       if kLineMonth == None:
@@ -919,21 +919,10 @@ def initStockKlineBar(stockId, rowIndexList, klineList, start):
       k_close = klineList['close'][idx]
       k_high = klineList['high'][idx]
       k_low = klineList['low'][idx]
-      # 更新本月数据
+
       kLineMonth.UpdatePreDayData(k_open, k_close, k_high, k_low)
-      # 补充前3月数据
-      for preMonthIdx in range(len(stockData.kLineMonths)-1, max(len(stockData.kLineMonths) - 4, -1), -1):
-        if stockData.kLineMonths[preMonthIdx].day < 30:
-          preKlineMonth = stockData.kLineMonths[preMonthIdx]
-          preKlineMonth.UpdatePreDayData(k_open, k_close, k_high, k_low)
-      # 更新本周数据
       if kLineWeek != None:
         kLineWeek.UpdatePreDayData(k_open, k_close, k_high, k_low)
-      # 补充前周数据
-      for preWeekIdx in range(len(stockData.kLineWeeks)-1, max(len(stockData.kLineWeeks) - 4, -1), -1):
-        if stockData.kLineWeeks[preWeekIdx].day < 7:
-          preKlineWeek = stockData.kLineWeeks[preWeekIdx]
-          preKlineWeek.UpdatePreDayData(k_open, k_close, k_high, k_low)
       # 更新日数据
       if kLineDay != None:
         kLineDay.UpdatePreDayData(k_open, k_close, k_high, k_low)
