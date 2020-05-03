@@ -56,7 +56,7 @@ class TraderParam:
     self.MACD_PRE_WEEK_COUNT = 2 # MACD周线缓存数
     # k线参数
     self.KLINE_BAR_MONTH_DAY = 40 # k线月线的天数
-    self.KLINE_BAR_WEEK_DAY = 5 # k线周线的天数
+    self.KLINE_BAR_WEEK_DAY = 10 # k线周线的天数
     # 枚举
     self.PROCESS_NONE = 0
     self.PROCESS_BUY = 1
@@ -432,7 +432,6 @@ class TradeManager:   # 交易管理
                 monthDiff3 = stockData.preKDJMonthDiff(3)
                 monthDiff2 = stockData.preKDJMonthDiff(2)
                 monthDiff1 = stockData.preKDJMonthDiff(1)
-                monthMacdDiff = stockData.preMACDMonthDiff(1)
                 weekDiff1 = stockData.preKDJWeekDiff(1)
                 dayDiff1 = stockData.preKDJDayDiff(1)
                 dayDiff2 = stockData.preKDJDayDiff(2)
@@ -445,9 +444,9 @@ class TradeManager:   # 交易管理
                   # if monthDiff1 > 0 and monthDiff2 < 0 and monthDiff3 < 0 and monthMacdDiff > 0:
                   #   buyReason = 1
                   #   buyMsg = "monthDiff1 > 0 and monthDiff2 < 0 and monthDiff3 < 0 and monthMacdDiff > 0 and weekDiff1 > 0 and weekMacdDiff > 0"
-                  if monthMacdDiff > 0 and stockData.curKDJMonth > stockData.kdjMonthAvg + 2:
+                  if stockData.curMacdDiffMonth > 1.00 and stockData.curKDJMonth > stockData.kdjMonthAvg + 2:
                     buyReason = 2
-                    buyMsg = "shData.kdjMonthAvg > shData.preKDJMonths[1] and stockData.curKDJMonth > stockData.kdjMonthAvg + 0.3"
+                    buyMsg = "stockData.curMacdDiffMonth > 1.00 and stockData.curKDJMonth > stockData.kdjMonthAvg + 2"
                   if buyReason > 0:
                     # 符合买入条件，进入交易席位
                     newRoom = TradeRoom()
@@ -461,7 +460,7 @@ class TradeManager:   # 交易管理
                     self.rooms.append(newRoom)
                     log.info("enter room, stockid={stockid}, preKDJ_1={preKDJ_1}, curKDJ={curKDJ}, lockCash={lockCash}".format(stockid = stockData.id, preKDJ_1 = stockData.preKDJMonths[1], curKDJ = stockData.curKDJMonth, lockCash = roomCash))
                     log.info("buyReason: {buyReason}, buyMsg = {buyMsg}".format(buyReason = buyReason, buyMsg = buyMsg))
-                    log.info("monthDiff1={monthDiff1},monthMacdDiff={monthMacdDiff},weekDiff1={weekDiff1},dayDiff2={dayDiff2},dayDiff1={dayDiff1}".format(monthDiff1=monthDiff1,monthMacdDiff=monthMacdDiff,weekDiff1=weekDiff1,dayDiff2=dayDiff2,dayDiff1=dayDiff1))
+                    log.info("monthDiff1={monthDiff1},monthMacdDiff={monthMacdDiff},weekDiff1={weekDiff1},dayDiff2={dayDiff2},dayDiff1={dayDiff1}".format(monthDiff1=monthDiff1,monthMacdDiff=stockData.curMacdDiffMonth,weekDiff1=weekDiff1,dayDiff2=dayDiff2,dayDiff1=dayDiff1))
                     if len(self.rooms) < g.MAX_ROOM:
                         continue
                     else:
