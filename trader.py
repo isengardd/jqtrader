@@ -434,9 +434,6 @@ class TradeManager:   # 交易管理
                   log.info("data error,id = {id} curKDJ = {curKDJ}".format(curKDJ = stockData.curKDJMonth, id = stockData.id))
                   continue
 
-                monthDiff4 = stockData.preKDJMonthDiff(4)
-                monthDiff3 = stockData.preKDJMonthDiff(3)
-                monthDiff2 = stockData.preKDJMonthDiff(2)
                 monthDiff1 = stockData.preKDJMonthDiff(1)
                 weekDiff1 = stockData.preKDJWeekDiff(1)
                 dayDiff1 = stockData.preKDJDayDiff(1)
@@ -450,7 +447,7 @@ class TradeManager:   # 交易管理
                   # if monthDiff1 > 0 and monthDiff2 < 0 and monthDiff3 < 0 and monthMacdDiff > 0:
                   #   buyReason = 1
                   #   buyMsg = "monthDiff1 > 0 and monthDiff2 < 0 and monthDiff3 < 0 and monthMacdDiff > 0 and weekDiff1 > 0 and weekMacdDiff > 0"
-                  if stockData.curMacdDiffMonth > 1.00 and stockData.curKDJMonth > stockData.kdjMonthAvg + 2:
+                  if stockData.curMacdDiffMonth > 0.00 and stockData.curKDJMonth > stockData.kdjMonthAvg + 2:
                     buyReason = 2
                     buyMsg = "stockData.curMacdDiffMonth > 1.00 and stockData.curKDJMonth > stockData.kdjMonthAvg + 2"
                   if buyReason > 0:
@@ -573,6 +570,8 @@ class TradeRoom:    #交易席位
         if self.stockCount != position.total_amount:
           self.stockCount = position.total_amount
           log.info("update stockcount, stock_id={0}, stockcount={1}".format(self.id, self.stockCount))
+      else:
+        self.stockCount = 0
 
     def monthDecideSell(self, context):
       stockData = g.stockDatas[self.id]
@@ -601,11 +600,12 @@ class TradeRoom:    #交易席位
               cur_order = ordersDic[self.tradeOrder.id]
               if cur_order.status == OrderStatus.held:
                   log.info("buy order held, stockid={0}, orderid={1}".format(self.id, self.tradeOrder.id))
-                  self.tradeProcess.changeType(context, gParam.PROCESS_BUY_DONE)
+                  if gParam.MULTI_STATUS_MACHINE:
+                    self.tradeProcess.changeSubType(gParam.PROCESS_SUB_BUY_DONE)
+                  else:
+                    self.tradeProcess.changeType(context, gParam.PROCESS_BUY_DONE)
                   self.tradeOrder = None  # 交易成功，清除交易对象
-                  self.cashLeft -= cur_order.filled * cur_order.price
-                  if self.cashLeft < 0:
-                      self.cashLeft = 0
+                  self.cashLeft = 0
                   return
           else:
               log.info("buy order not found, stockid={0}, orderid={1}".format(self.id, self.tradeOrder.id))
@@ -615,13 +615,13 @@ class TradeRoom:    #交易席位
           if self.tradeOrder != None:
               return
           cur_price = data[self.id].avg
-          buy_count = LowStockCount(self.cashTotal / cur_price)
+          buy_count = LowStockCount(self.cashLeft / cur_price)
           if buy_count == 0:
-              log.info("error,buy_count=0: id={0},price={1},cashtotal={2}".format(self.id, cur_price, self.cashTotal))
+              log.info("error,buy_count=0: id={0},price={1},cashleft={2}".format(self.id, cur_price, self.cashLeft))
               return
           orderRes = order(self.id, buy_count)
           if orderRes == None:
-              log.info("error, buy order failed: orderRes is none, id={0},price={1},cashtotal={2}".format(self.id, cur_price, self.cashTotal))
+              log.info("error, buy order failed: orderRes is none, id={0},price={1},cashleft={2}".format(self.id, cur_price, self.cashLeft))
               return
 
           self.tradeOrder = TradeOrder()
@@ -641,7 +641,7 @@ class TradeRoom:    #交易席位
           return
 
         # todo: 根据周线交易
-        self.processSubTrade(context)
+        self.processSubTrade(context, data)
 
     def processBuyDone(self, context):
       self.cashLeft = 0
@@ -655,12 +655,7 @@ class TradeRoom:    #交易席位
     def processSell(self, context, data):
       # todo: 如果有买单，需要撤销
       if self.tradeOrder == None:
-        # 检查一下持股数
-        if context.subportfolios[0].positions.has_key(self.id):
-          position = context.subportfolios[0].positions[self.id]
-          self.stockCount = position.total_amount
-        else:
-          self.stockCount = 0
+        self.updateStockCount(context)
 
         if self.stockCount == 0:
           log.info("trade in gParam.PROCESS_SELL, stockid={0}  but stockCount is 0".format(self.id))
@@ -683,15 +678,98 @@ class TradeRoom:    #交易席位
           self.tradeOrder.id = orderRes.order_id
           log.info("order sell: stock_id={0}, order_id={1}, price={2}".format(self.id, orderRes.order_id, cur_price))
 
-    def processSubTrade(self, context):
+    def processSubTrade(self, context, data):
+      stockData = g.stockDatas[self.id]
       if self.tradeProcess.subTradeType == gParam.PROCESS_NONE:
-        pass
+        self.cashLeft = self.cashTotal
+        if stockData.curKDJMonth >= gParam.ONE_STOCK_BUY_KDJ_LINE:
+          return
+        # 超过周线Kdj均线，切换到买入状态
+        # 资金不够操作
+        cur_price = data[self.id].avg
+        minRequireCash = cur_price * gParam.MIN_BUY_COUNT
+        if self.cashLeft < minRequireCash:
+          log.info("processSubTrade not enough money to buy, roomCash={roomCash}, minRequire={mincash}".format(roomCash=self.cashLeft,mincash=minRequireCash))
+          return
+        if stockData.curKDJWeek == gParam.ERR_DATA:
+          log.info("data error,id = {id} curKDJWeek = {curKDJ}".format(curKDJ = stockData.curKDJWeek, id = stockData.id))
+          return
+        buyReason = 0
+        buyMsg = ""
+        if stockData.curMacdDiffWeek > 0 and stockData.curKDJWeek > stockData.kdjWeekAvg + 2.5:
+          buyReason = 1
+          buyMsg = "stockData.curMacdDiffWeek > 0 and stockData.curKDJWeek > stockData.kdjWeekAvg + 0.5"
+        if buyReason > 0:
+          log.info("processSubTrade change to buy, stockId={id}, macddiff={macddiff}, kdjw={kdjw}, kdjwavg={kdjwavg}".format(id=stockData.id, macddiff=stockData.curMacdDiffWeek,kdjw=stockData.curKDJWeek,kdjwavg=stockData.kdjWeekAvg))
+          log.info("buyReason: {buyReason}, buyMsg = {buyMsg}".format(buyReason = buyReason, buyMsg = buyMsg))
+          self.tradeProcess.changeSubType(gParam.PROCESS_SUB_BUY)
       if self.tradeProcess.subTradeType == gParam.PROCESS_SUB_BUY:
-        pass
+        # 如果已经有买单，等待买单完成，切换到buy_done状态
+        # 如果没有买单，下单购买
+        self.updateOrBuyOrder(context, data)
       if self.tradeProcess.subTradeType == gParam.PROCESS_SUB_BUY_DONE:
-        pass
+        # 如果低于周线kdj均线，切换到卖出状态
+        self.cashLeft = 0
+        self.updateStockCount(context)
+        if self.stockCount == 0:
+          log.info("trade in gParam.PROCESS_SUB_BUY_DONE, stock_id={0} but stockCount is 0".format(self.id))
+          self.tradeProcess.changeSubType(gParam.PROCESS_SUB_SELL)
+        else:
+          if stockData.curKDJWeek == gParam.ERR_DATA:
+            log.info("data error,id = {id} curKDJWeek = {curKDJ}".format(curKDJ = stockData.curKDJWeek, id = stockData.id))
+            return
+          sellReason = 0
+          sellMsg = ""
+          if stockData.curKDJWeek < stockData.kdjWeekAvg - 2.0:
+            sellReason = 1
+            sellMsg = "stockData.curKDJWeek < stockData.kdjWeekAvg - 1.0"
+          if sellReason > 0:
+            self.tradeProcess.changeSubType(gParam.PROCESS_SUB_SELL)
+            log.info("change to sell, stockid={stockid}, kdjw={kdjw}, kdjwavg={kdjwavg}".format(stockid=stockData.id, kdjw=stockData.curKDJWeek, kdjwavg=stockData.kdjWeekAvg))
+            log.info("sellReason: {sellReason}, Msg = {sellMsg}".format(sellReason = sellReason, sellMsg = sellMsg))
       if self.tradeProcess.subTradeType == gParam.PROCESS_SUB_SELL:
-        pass
+        # 如果已经有卖单，等待卖单完成，切换到none状态
+        # 如果没有卖单，下单卖出
+        if self.tradeOrder != None:
+          ordersDic = get_orders(order_id=self.tradeOrder.id)
+          if ordersDic.has_key(self.tradeOrder.id):
+            cur_order = ordersDic[self.tradeOrder.id]
+            if cur_order.status == OrderStatus.held:
+              log.info("sell order held, stockid={0}, orderid={1}".format(self.id, self.tradeOrder.id))
+              self.tradeProcess.changeSubType(gParam.PROCESS_NONE)
+              self.tradeOrder = None  # 交易成功，清除交易对象
+              self.cashLeft = self.cashTotal
+              return
+            else:
+              return
+          else:
+            log.info("sell order not found, stockid={0}, orderid={1}".format(self.id, self.tradeOrder.id))
+            return
+        # 当前没订单
+        self.updateStockCount(context)
+
+        if self.stockCount == 0:
+          log.info("trade in gParam.PROCESS_SUB_SELL, stockid={0}  but stockCount is 0".format(stockData.id))
+          self.tradeProcess.changeSubType(gParam.PROCESS_NONE)
+          self.cashLeft = self.cashTotal
+          return
+
+        if GetDayTimeStamp(context.current_dt, 0) >= self.tradeProcess.stepEnable:
+          sell_count = self.stockCount
+          if sell_count == 0:
+            self.tradeProcess.changeSubType(gParam.PROCESS_NONE)
+            self.cashLeft = self.cashTotal
+            return
+
+          cur_price = data[self.id].avg
+          orderRes = order(self.id, -sell_count)
+          if orderRes == None:
+            log.info("error, sell order failed: orderRes is none, id={0},price={1},stockCount={2}".format(self.id, cur_price, self.stockCount))
+            return
+
+          self.tradeOrder = TradeOrder()
+          self.tradeOrder.id = orderRes.order_id
+          log.info("order sell: stock_id={0}, order_id={1}, price={2}".format(self.id, orderRes.order_id, cur_price))
 class TradeProcess:    #交易过程
   def __init__(self):
     self.tradeType = gParam.PROCESS_NONE  # 1 买入阶段 2 买入完成  3 卖出阶段 4 卖出完成
@@ -700,7 +778,7 @@ class TradeProcess:    #交易过程
   def changeType(self, context, type):
     self.tradeType = type
     self.stepEnable = GetDayTimeStamp(context.current_dt, 0)
-  def changeSubType(self, context, type):
+  def changeSubType(self, type):
     self.subTradeType = type
 class TradeOrder:   #交易订单
   def __init__(self):
@@ -761,7 +839,11 @@ def before_trading_start(context):
             newRoom.cashLeft = 0
             newRoom.stockCount = position.total_amount
             newRoom.tradeProcess = TradeProcess()
-            newRoom.tradeProcess.tradeType = gParam.PROCESS_BUY_DONE
+            if gParam.MULTI_STATUS_MACHINE:
+              newRoom.tradeProcess.tradeType = gParam.PROCESS_BUY
+              newRoom.tradeProcess.subTradeType = gParam.PROCESS_SUB_BUY_DONE
+            else:
+              newRoom.tradeProcess.tradeType = gParam.PROCESS_BUY_DONE
             newRoom.tradeProcess.stepEnable = 0
             g.tradeManager.rooms.append(newRoom)
             log.info("restore stock position: id={0}, stockcount={1}".format(stockId, newRoom.stockCount))
@@ -992,9 +1074,17 @@ def after_trading_end(context):
         if cur_order.amount == cur_order.filled:
           # 全部成交，进入下一个阶段或者状态
           if cur_order.is_buy:
-            room.tradeProcess.changeType(context, gParam.PROCESS_BUY_DONE)
+            room.cashLeft = 0
+            if gParam.MULTI_STATUS_MACHINE:
+              room.tradeProcess.changeSubType(gParam.PROCESS_SUB_BUY_DONE)
+            else:
+              room.tradeProcess.changeType(context, gParam.PROCESS_BUY_DONE)
           else:
-            room.tradeProcess.changeType(context, gParam.PROCESS_SELL_DONE)
+            if gParam.MULTI_STATUS_MACHINE:
+              room.tradeProcess.changeSubType(gParam.PROCESS_NONE)
+              room.cashLeft = room.cashTotal
+            else:
+              room.tradeProcess.changeType(context, gParam.PROCESS_SELL_DONE)
           room.tradeOrder = None
         else:
           # 有未成交的情况，下一个交易日继续交易
