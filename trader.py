@@ -356,7 +356,7 @@ class TradeManager:   # 交易管理
         self.runCount = 0 # 执行run的次数
 
     def hasEmptyRoom(self):
-        return len(self.rooms) < self.MAX_ROOM
+        return len(self.rooms) < g.MAX_ROOM
 
     def run(self, context, data):
         recalcKDJ = False
