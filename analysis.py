@@ -5,6 +5,7 @@ import datetime
 import math
 import calendar
 import numpy
+from stocktools import *
 
 class TraderParam:
   def __init__(self):
@@ -16,15 +17,9 @@ class TraderParam:
     # self.INCOME = 2e8 # 利润
 
     # 与trader复用的参数
-    self.EMA_K_FACTOR = 5.4500     # ema公式中的k值系数
-    self.ERR_DATA = -666666        # 错误数据
     self.KLINE_FREQUENCY = "1d"
     self.KLINE_LENGTH = 60       # 月K线数量， 最多取 60个月数据
-    self.SH_CODE = '000001.XSHG'
 
-    self.SKILL_MACD = 0
-    self.SKILL_RSI = 1
-    self.SKILL_KDJ = 2
     self.RSI_PARAM = 5
     self.KDJ_PARAM1 = 9
     self.KDJ_PARAM2 = 3
@@ -32,183 +27,9 @@ class TraderParam:
 
 gParam = TraderParam()
 
-def LowStockCount(num):
-  return int(num/100.00)*100
-
-def GetDayTimeStamp(dt, deltaDay):
-  # 获取当天起始时间戳
-  tp = datetime.datetime(year=dt.year, month=dt.month, day=dt.day, hour=0, minute=0, second=0).timetuple()
-  tt = time.mktime(tp) + deltaDay * 86400
-  return int(tt)
-
-class CalcCommon:
-  def __init__(self):
-    self.emaFactorMap = {}
-    self.skillType = gParam.SKILL_MACD
-
-  def GetEMA(self, valueList, N):
-    if len(valueList) == 0:
-      log.info("error: GetEMA: N = {N}, but valueList is empty".format(N = N))
-      return float(0)
-    # minLen = self.GetEMA_K(N)
-    # if len(valueList) < minLen:
-    #   log.info("GetEMA: N = {0}, minLen = {1}, len(val) = {2}".format(N, minLen, len(valueList)))
-    #   return float(0)
-
-    emaFactorList = self.GetEMAFactorList(N)
-    if len(emaFactorList) == 0:
-      log.info("GetEMA: len(emaFactorList) == 0")
-      return float(0)
-    alpha = self.GetAlpha(N)
-    ema = float(0)
-    for i in range(len(emaFactorList)):
-      val = float(valueList[i]) if len(valueList) > i else 0
-      ema += (float(val) * emaFactorList[i])
-
-    ema = ema*alpha
-    return ema
-
-  def GetEMA_K(self, N):
-    return int(float(gParam.EMA_K_FACTOR) * float(N + 1))
-
-  def GetAlpha(self, N):
-    if self.skillType == gParam.SKILL_MACD:
-      return float(2) / float(N+1)
-    else:
-      return float(1) / float(N)
-
-  def GetEMAFactorList(self, N):
-    if self.emaFactorMap.has_key(N):
-      return self.emaFactorMap[N]
-    if N <= 0:
-      return []
-
-    alpha = self.GetAlpha(N)
-    k = self.GetEMA_K(N)
-    emaFactorList = [1.0000]
-    for i in range(1, k):
-      emaFactorList.append(float(emaFactorList[i-1])*(float(1) - alpha))
-    self.emaFactorMap[N] = emaFactorList
-    return self.emaFactorMap[N]
-
-  def GetMaxPrice(self, kLine):
-    max = float(0)
-    for val in kLine:
-      if val.high > max:
-        max = val.high
-    return max
-
-  def GetMinPrice(self, kLine):
-    min = float(10000000)
-    for val in kLine:
-      if val.low < min:
-        min = val.low
-    return min
-
-class CalcKDJ(CalcCommon):
-  def __init__(self):
-    CalcCommon.__init__(self)
-    self.skillType = gParam.SKILL_KDJ
-
-  def GetKDJ(self, kLine, N, M1, M2):
-    if N == 0 or M1 == 0 or M2 == 0:
-      return (gParam.ERR_DATA, gParam.ERR_DATA)
-    # 这里只返回 (k,d)
-    rsvDay = int(self.GetEMA_K(M2) + self.GetEMA_K(M1)) + int(N)
-    if len(kLine) < rsvDay:
-      log.info("GetKDJ: len(kLine) = {0}, rsvDay = {1}".format(len(kLine), rsvDay))
-      return (gParam.ERR_DATA, gParam.ERR_DATA)
-    rsvList = [float(0) for i in range(rsvDay)]
-    for i in range(rsvDay):
-      rsvList[i] = self.GetRSV(kLine[i : int(N) + i], N)
-    # 算出K值
-    kDay = int(self.GetEMA_K(M2))
-    if kDay < 2:
-      log.info("GetKDJ: kDay < 2, M2 = {0}".format(M2))
-      return (gParam.ERR_DATA, gParam.ERR_DATA)
-    kList = [float(0) for i in range(kDay)]
-    kList[len(kList)-1] = self.GetEMA(rsvList[len(kList)-1 : len(kList)+int(self.GetEMA_K(M1))-1], M1)
-    for i in range(len(kList)-2, -1, -1):
-      if math.isnan(kList[i+1]):
-        kList[i+1] = 50.00
-      kList[i] = self.GetAlpha(M1)*rsvList[i] + kList[i+1]*(1-self.GetAlpha(M1))
-    # 算出d值
-    dVal = self.GetEMA(kList, M2)
-    # print kList
-    # print rsvList
-    return (round(kList[0], 2), round(dVal, 2))
-  def GetRSV(self, kLine, N):
-    if len(kLine) < N:
-      if len(kLine) == 0:
-        log.info("GetRSV error, len(kLine) = {0} < N = {1}".format(len(kLine), N))
-        return gParam.ERR_DATA
-      else:
-        N = len(kLine)
-
-    max = self.GetMaxPrice(kLine[:N])
-    min = self.GetMinPrice(kLine[:N])
-
-    if max == gParam.ERR_DATA or min == gParam.ERR_DATA or min == max:
-      log.info("GetRSV error, min = {min}, max = {max}".format(min=min,max=max))
-      return gParam.ERR_DATA
-
-    # print "max = {0}, min = {1}".format(max, min)
-    rsv = (kLine[0].close - min) / (max - min) * float(100)
-    if rsv < float(1):
-      rsv = float(1)
-
-    if rsv > float(100):
-      rsv = float(100)
-
-    return rsv
-  def CalcEMAFactorList(self, N):
-    pass
-
-class CalcRSI(CalcCommon):
-  def __init__(self):
-    CalcCommon.__init__(self)
-    self.skillType = gParam.SKILL_RSI
-
-  def GetRSI(self, kLine, N):
-    if len(kLine) == 0:
-      return gParam.ERR_DATA
-    uKline = [float(0) for i in kLine]
-    dKline = [float(0) for i in kLine]
-
-    for i in range(len(kLine) - 1):
-      if kLine[i].close > kLine[i+1].close:
-        uKline[i] = kLine[i].close - kLine[i+1].close
-      elif kLine[i].close < kLine[i+1].close:
-        dKline[i] = kLine[i+1].close - kLine[i].close
-    uEma = self.GetEMA(uKline, N)
-    dEma = self.GetEMA(dKline, N)
-    if uEma == 0 or dEma == 0:
-      return gParam.ERR_DATA
-    # print "uEma = {0}, dEma = {1}".format(uEma, dEma)
-    return (uEma / (uEma + dEma)) * float(100.0000)
-
-  def CalcEMAFactorList(self, N):
-    pass
-
-class CalcMACD(CalcCommon):
-  def __init__(self):
-    CalcCommon.__init__(self)
-    self.skillType = gParam.SKILL_MACD
-
-  def GetDiff(self, kLine):
-    closeKline = [i.close for i in kLine]
-    return self.GetEMA(closeKline, 12) - self.GetEMA(closeKline, 26)
-
-class KLineBar:
-  def __init__(self):
-    self.open = float(0.00)
-    self.close = float(0.00)
-    self.high = float(0.00)
-    self.low = float(0.00)
-    self.timestamp = 0
-
 class StockData:
   def __init__(self):
+    self.name = ''
     self.id = ''
     self.klines = []
     self.publishDays = 0 # 发行时间
@@ -278,8 +99,9 @@ def before_trading_start(context):
     )
     # 回测环境的时间戳是当日0点！！ datetime.date类型
     rowIndexList = klineList['date']
-
     stockData = StockData()
+    securityInfo = get_security_info(stock)
+    stockData.name = securityInfo.display_name
     stockData.id = stock
     # 按自然月划分k线柱
     dealWithFirstMonth = False
@@ -375,8 +197,8 @@ def before_trading_start(context):
 
       if buyReason > 0 and stockData.preMacdDiff_1 < stockData.preMacdDiff:
         validCount += 1
-        log.info("id = {id}, number={number},pub={publishDays}, pre_open={preDayOpen}, pre_close={preDayClose}, k_open={k_open}, k_close={k_close}, \n reason={buyReason},rsi = {rsi}, pre_macd_diff={pre_macd_diff}, macd_diff={macd_diff}, k-4={pre_kdj4},k-3={pre_kdj3}, k-2={pre_kdj2}, k-1={pre_kdj1}, kdj = {kdj}"\
-        .format(id = stockData.id, number=validCount, publishDays = stockData.publishDays, k_open = k_open, \
+        log.info("name= {name}, id = {id}, number={number},pub={publishDays}, pre_open={preDayOpen}, pre_close={preDayClose}, k_open={k_open}, k_close={k_close}, \n reason={buyReason},rsi = {rsi}, pre_macd_diff={pre_macd_diff}, macd_diff={macd_diff}, k-4={pre_kdj4},k-3={pre_kdj3}, k-2={pre_kdj2}, k-1={pre_kdj1}, kdj = {kdj}"\
+        .format(name = stockData.name, id = stockData.id, number=validCount, publishDays = stockData.publishDays, k_open = k_open, \
         k_close = k_close, preDayOpen = preDayOpen, preDayClose = preDayClose, \
         buyReason = buyReason, rsi = stockData.preRSI, pre_macd_diff = stockData.preMacdDiff_1, macd_diff = stockData.preMacdDiff, kdj = stockData.preKDJ, pre_kdj4 = stockData.preKDJ_4, pre_kdj3 = stockData.preKDJ_3, \
         pre_kdj2 = stockData.preKDJ_2, pre_kdj1 = stockData.preKDJ_1))

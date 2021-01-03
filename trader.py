@@ -5,24 +5,10 @@ import datetime
 import math
 import calendar
 import numpy
-
-class TimeRecord:
-  def __init__(self):
-    self.startTime = 0
-    self.endTime = 0
-
-  def start(self):
-    self.startTime = time.time()
-    self.endTime = 0
-
-  def end(self, msg):
-    self.endTime = time.time()
-    log.info("{msg} time: {diffTime}".format(msg=msg, diffTime=self.endTime-self.startTime))
+from stocktools import *
 
 class TraderParam:
   def __init__(self):
-    self.EMA_K_FACTOR = 5.4500     # ema公式中的k值系数
-    self.ERR_DATA = -666666        # 错误数据
     self.MIN_BUY_COUNT = 100       # 最小买股数
 
     # 交易参数
@@ -34,14 +20,10 @@ class TraderParam:
     self.ROOM_MAX = 10 # 要交易的股票数
     self.BUY_INTERVAL_DAY = 1
     self.SELL_INTERVAL_DAY = 1
-    self.SH_CODE = '000001.XSHG'
     self.SH_DEAD_KDJ_LINE = 75.00  # 上证指数kdj超过这个数值，停止交易，卖出所有持仓
     self.SH_STOP_BUY_KDJ_LINE = 73.00 # 上证指数kdj超过这个数值，停止买入
     self.ONE_STOCK_BUY_KDJ_LINE = 85.00 # 个股的kdj超过这个数值，停止买入
 
-    self.SKILL_MACD = 0
-    self.SKILL_RSI = 1
-    self.SKILL_KDJ = 2
     self.RSI_PARAM = 5
     self.KDJ_PARAM1 = 9
     self.KDJ_PARAM2 = 3
@@ -71,7 +53,7 @@ class TraderParam:
     self.ORDER_RESELL = 2
 
     self.securities = [
-    self.SH_CODE, # 上证指数也考虑进来
+    SH_CODE, # 上证指数也考虑进来
     '601988','000538','000002','600642',
     '600104','601633','000895','600660',
     '600690','000568','600031','600320',
@@ -81,195 +63,10 @@ class TraderParam:
     '601919','000725','002352','601628',
     '601319','002797'
     ] if self.PRODUCT else [
-      self.SH_CODE, '600763'
+      SH_CODE, '600763'
     ]
 gParam = TraderParam()
 
-def LowStockCount(num):
-  return int(num/100.00)*100
-
-def GetDayTimeStamp(dt, deltaDay):
-  # 获取当天起始时间戳
-  tp = datetime.datetime(year=dt.year, month=dt.month, day=dt.day, hour=0, minute=0, second=0).timetuple()
-  tt = time.mktime(tp) + deltaDay * 86400
-  return int(tt)
-
-class CalcCommon:
-  def __init__(self):
-    self.emaFactorMap = {}
-    self.skillType = gParam.SKILL_MACD
-
-  def GetEMA(self, valueList, N):
-    if len(valueList) == 0:
-      log.info("error: GetEMA: N = {N}, but valueList is empty".format(N = N))
-      return float(0)
-    # minLen = self.GetEMA_K(N)
-    # if len(valueList) < minLen:
-    #   log.info("GetEMA: N = {0}, minLen = {1}, len(val) = {2}".format(N, minLen, len(valueList)))
-    #   return float(0)
-
-    emaFactorList = self.GetEMAFactorList(N)
-    if len(emaFactorList) == 0:
-      log.info("GetEMA: len(emaFactorList) == 0")
-      return float(0)
-    alpha = self.GetAlpha(N)
-    ema = float(0)
-    for i in range(len(emaFactorList)):
-      val = float(valueList[i]) if len(valueList) > i else 0
-      ema += (float(val) * emaFactorList[i])
-
-    ema = ema*alpha
-    return ema
-
-  def GetEMA_K(self, N):
-    return int(float(gParam.EMA_K_FACTOR) * float(N + 1))
-
-  def GetAlpha(self, N):
-    if self.skillType == gParam.SKILL_MACD:
-      return float(2) / float(N+1)
-    else:
-      return float(1) / float(N)
-
-  def GetEMAFactorList(self, N):
-    if self.emaFactorMap.has_key(N):
-      return self.emaFactorMap[N]
-    if N <= 0:
-      return []
-
-    alpha = self.GetAlpha(N)
-    k = self.GetEMA_K(N)
-    emaFactorList = [1.0000]
-    for i in range(1, k):
-      emaFactorList.append(float(emaFactorList[i-1])*(float(1) - alpha))
-    self.emaFactorMap[N] = emaFactorList
-    return self.emaFactorMap[N]
-
-  def GetMaxPrice(self, kLine):
-    max = float(0)
-    for val in kLine:
-      if val.high > max:
-        max = val.high
-    return max
-
-  def GetMinPrice(self, kLine):
-    min = float(10000000)
-    for val in kLine:
-      if val.low < min:
-        min = val.low
-    return min
-
-class CalcKDJ(CalcCommon):
-  def __init__(self):
-    CalcCommon.__init__(self)
-    self.skillType = gParam.SKILL_KDJ
-
-  def GetKDJ(self, kLine, N, M1, M2):
-    if N == 0 or M1 == 0 or M2 == 0:
-      return (gParam.ERR_DATA, gParam.ERR_DATA)
-    # 这里只返回 (k,d)
-    rsvDay = int(self.GetEMA_K(M2) + self.GetEMA_K(M1)) + int(N)
-    if len(kLine) < rsvDay:
-      log.info("GetKDJ: len(kLine) = {0}, rsvDay = {1}".format(len(kLine), rsvDay))
-      return (gParam.ERR_DATA, gParam.ERR_DATA)
-    rsvList = [float(0) for i in range(rsvDay)]
-    for i in range(rsvDay):
-      rsvList[i] = self.GetRSV(kLine[i : int(N) + i], N)
-    # 算出K值
-    kDay = int(self.GetEMA_K(M2))
-    if kDay < 2:
-      log.info("GetKDJ: kDay < 2, M2 = {0}".format(M2))
-      return (gParam.ERR_DATA, gParam.ERR_DATA)
-    kList = [float(0) for i in range(kDay)]
-    kList[len(kList)-1] = self.GetEMA(rsvList[len(kList)-1 : len(kList)+int(self.GetEMA_K(M1))-1], M1)
-    for i in range(len(kList)-2, -1, -1):
-      if math.isnan(kList[i+1]):
-        kList[i+1] = 50.00
-      kList[i] = self.GetAlpha(M1)*rsvList[i] + kList[i+1]*(1-self.GetAlpha(M1))
-    # 算出d值
-    dVal = self.GetEMA(kList, M2)
-    # print kList
-    # print rsvList
-    return (round(kList[0], 2), round(dVal, 2))
-  def GetRSV(self, kLine, N):
-    if len(kLine) < N:
-      if len(kLine) == 0:
-        log.info("GetRSV error, len(kLine) = {0} < N = {1}".format(len(kLine), N))
-        return gParam.ERR_DATA
-      else:
-        N = len(kLine)
-
-    max = self.GetMaxPrice(kLine[:N])
-    min = self.GetMinPrice(kLine[:N])
-
-    if max == gParam.ERR_DATA or min == gParam.ERR_DATA or min == max:
-      log.info("GetRSV error, min = {min}, max = {max}".format(min=min,max=max))
-      return gParam.ERR_DATA
-
-    # print "max = {0}, min = {1}".format(max, min)
-    rsv = (kLine[0].close - min) / (max - min) * float(100)
-    if rsv < float(1):
-      rsv = float(1)
-
-    if rsv > float(100):
-      rsv = float(100)
-
-    return rsv
-  def CalcEMAFactorList(self, N):
-    pass
-
-class CalcRSI(CalcCommon):
-  def __init__(self):
-    CalcCommon.__init__(self)
-    self.skillType = gParam.SKILL_RSI
-
-  def GetRSI(self, kLine, N):
-    if len(kLine) == 0:
-      return gParam.ERR_DATA
-    uKline = [float(0) for i in kLine]
-    dKline = [float(0) for i in kLine]
-
-    for i in range(len(kLine) - 1):
-      if kLine[i].close > kLine[i+1].close:
-        uKline[i] = kLine[i].close - kLine[i+1].close
-      elif kLine[i].close < kLine[i+1].close:
-        dKline[i] = kLine[i+1].close - kLine[i].close
-    uEma = self.GetEMA(uKline, N)
-    dEma = self.GetEMA(dKline, N)
-    if uEma == 0 or dEma == 0:
-      return gParam.ERR_DATA
-    # print "uEma = {0}, dEma = {1}".format(uEma, dEma)
-    return (uEma / (uEma + dEma)) * float(100.0000)
-
-  def CalcEMAFactorList(self, N):
-    pass
-
-class CalcMACD(CalcCommon):
-  def __init__(self):
-    CalcCommon.__init__(self)
-    self.skillType = gParam.SKILL_MACD
-
-  def GetDiff(self, kLine):
-    closeKline = [i.close for i in kLine]
-    return self.GetEMA(closeKline, 12) - self.GetEMA(closeKline, 26)
-
-class KLineBar:
-  def __init__(self):
-    self.open = float(0.00)
-    self.close = float(0.00)
-    self.high = float(0.00)
-    self.low = float(0.00)
-    self.timestamp = 0
-    self.day = 0 # 统计的天数
-
-  def UpdatePreDayData(self, open, close, high, low):
-    self.open = open
-    if self.close < float(0.001):
-        self.close = close
-    if high > self.high:
-        self.high = high
-    if low < self.low or self.low < float(0.001):
-        self.low = low
-    self.day += 1
 class StockData:
   def __init__(self):
     self.id = ''
@@ -369,6 +166,7 @@ class StockData:
       if self.preMacdDiffWeeks[index] >= self.preMacdDiffWeeks[index + 1]:
         return False
     return True
+
 class TradeManager:   # 交易管理
     def __init__(self):
         self.rooms = [] #交易席位
@@ -393,12 +191,12 @@ class TradeManager:   # 交易管理
             return
         self.runCount += 1
 
-        shData = g.stockDatas[normalize_code(gParam.SH_CODE)]
+        shData = g.stockDatas[normalize_code(SH_CODE)]
         calcKDJ = CalcKDJ()
         calcMACD = CalcMACD()
         if recalcKDJ:
             for stockId in g.securities:
-                # if normalize_code(gParam.SH_CODE) == stockId:
+                # if normalize_code(SH_CODE) == stockId:
                 #     continue
 
                 if data[stockId].paused == True:
@@ -436,7 +234,7 @@ class TradeManager:   # 交易管理
             # 席位未满,查找买入机会
             roomsId = [room.id for room in self.rooms]
             for stockId in g.securities:
-                if normalize_code(gParam.SH_CODE) == stockId:
+                if normalize_code(SH_CODE) == stockId:
                     continue
                 if data[stockId].paused == True:
                     continue
@@ -453,7 +251,7 @@ class TradeManager:   # 交易管理
                   log.info("not enough money to buy, roomCash={roomCash}, minRequire={mincash}".format(roomCash=roomCash,mincash=cur_price * gParam.MIN_BUY_COUNT))
                   continue
 
-                if stockData.curKDJMonth == gParam.ERR_DATA:
+                if stockData.curKDJMonth == ERR_DATA:
                   log.info("data error,id = {id} curKDJ = {curKDJ}".format(curKDJ = stockData.curKDJMonth, id = stockData.id))
                   continue
 
@@ -534,7 +332,7 @@ class TradeRoom:    #交易席位
             # 先查询现有订单状态
             if self.tradeOrder != None:
                 ordersDic = get_orders(order_id=self.tradeOrder.id)
-                if ordersDic.has_key(self.tradeOrder.id):
+                if self.tradeOrder.id in ordersDic:
                     cur_order = ordersDic[self.tradeOrder.id]
                     if cur_order.status == OrderStatus.held:
                         log.info("sell order held, stockid={0}, orderid={1}".format(self.id, self.tradeOrder.id))
@@ -547,7 +345,7 @@ class TradeRoom:    #交易席位
                     log.info("sell order not found, stockid={0}, orderid={1}".format(self.id, self.tradeOrder.id))
                     return
     def run(self, context, data):
-        shData = g.stockDatas[normalize_code(gParam.SH_CODE)]
+        shData = g.stockDatas[normalize_code(SH_CODE)]
         if shData.curKDJMonth >= gParam.SH_DEAD_KDJ_LINE:
             self.tradeProcess.changeType(context, gParam.PROCESS_SELL)
 
@@ -570,7 +368,7 @@ class TradeRoom:    #交易席位
           log.info("error, redo order stockcount is empty!")
           self.tradeOrder = None
           return False
-        shData = g.stockDatas[normalize_code(gParam.SH_CODE)]
+        shData = g.stockDatas[normalize_code(SH_CODE)]
         if shData.curKDJMonth >= gParam.SH_DEAD_KDJ_LINE:
           self.tradeOrder = None
           return False
@@ -588,7 +386,7 @@ class TradeRoom:    #交易席位
         return True
 
     def updateStockCount(self, context):
-      if context.subportfolios[0].positions.has_key(self.id):
+      if self.id in context.subportfolios[0].positions:
         position = context.subportfolios[0].positions[self.id]
         if self.stockCount != position.total_amount:
           self.stockCount = position.total_amount
@@ -598,7 +396,7 @@ class TradeRoom:    #交易席位
 
     def monthDecideSell(self, context):
       stockData = g.stockDatas[self.id]
-      if stockData.curKDJMonth == gParam.ERR_DATA:
+      if stockData.curKDJMonth == ERR_DATA:
         log.info("data error,id = {id} curKDJ = {curKDJ}".format(curKDJ=stockData.curKDJMonth, id=stockData.id))
         return False
 
@@ -619,7 +417,7 @@ class TradeRoom:    #交易席位
       # 先查询现有订单状态
       if self.tradeOrder != None:
           ordersDic = get_orders(order_id=self.tradeOrder.id)
-          if ordersDic.has_key(self.tradeOrder.id):
+          if self.tradeOrder.id in ordersDic:
               cur_order = ordersDic[self.tradeOrder.id]
               if cur_order.status == OrderStatus.held:
                   log.info("buy order held, stockid={0}, orderid={1}".format(self.id, self.tradeOrder.id))
@@ -714,7 +512,7 @@ class TradeRoom:    #交易席位
         if self.cashLeft < minRequireCash:
           log.info("processSubTrade not enough money to buy, roomCash={roomCash}, minRequire={mincash}".format(roomCash=self.cashLeft,mincash=minRequireCash))
           return
-        if stockData.curKDJWeek == gParam.ERR_DATA:
+        if stockData.curKDJWeek == ERR_DATA:
           log.info("data error,id = {id} curKDJWeek = {curKDJ}".format(curKDJ = stockData.curKDJWeek, id = stockData.id))
           return
         buyReason = 0
@@ -738,7 +536,7 @@ class TradeRoom:    #交易席位
           log.info("trade in gParam.PROCESS_SUB_BUY_DONE, stock_id={0} but stockCount is 0".format(self.id))
           self.tradeProcess.changeSubType(gParam.PROCESS_SUB_SELL)
         else:
-          if stockData.curKDJWeek == gParam.ERR_DATA:
+          if stockData.curKDJWeek == ERR_DATA:
             log.info("data error,id = {id} curKDJWeek = {curKDJ}".format(curKDJ = stockData.curKDJWeek, id = stockData.id))
             return
           sellReason = 0
@@ -755,7 +553,7 @@ class TradeRoom:    #交易席位
         # 如果没有卖单，下单卖出
         if self.tradeOrder != None:
           ordersDic = get_orders(order_id=self.tradeOrder.id)
-          if ordersDic.has_key(self.tradeOrder.id):
+          if self.tradeOrder.id in ordersDic:
             cur_order = ordersDic[self.tradeOrder.id]
             if cur_order.status == OrderStatus.held:
               log.info("sell order held, stockid={0}, orderid={1}".format(self.id, self.tradeOrder.id))
@@ -925,7 +723,7 @@ def before_trading_start(context):
           stockData.kdjWeekAvg = getKDJWeekAvg(rowIndexList, klineList, gParam.KDJ_WEEK_AVG_COUNT)
         else:
           # 测试环境使用缓存的数据计算平均值, todo: 这里没有缓存上
-          preGStockData = preGStockDatas[stock] if preGStockDatas and preGStockDatas.has_key(stock) else None
+          preGStockData = preGStockDatas[stock] if preGStockDatas and stock in preGStockDatas else None
           if preGStockData == None or preGStockData.kdjMonthAvg <= float(0.001):
             # 这里取逆序
             for preDayIndex in range(max(gParam.KDJ_MONTH_AVG_COUNT, gParam.KDJ_WEEK_AVG_COUNT)-1, -1, -1):
@@ -1082,13 +880,13 @@ def after_trading_end(context):
   # 更新持股数
   # 当天没完成的订单，根据订单状态，回滚数据
   for room in g.tradeManager.rooms:
-    if context.subportfolios[0].positions.has_key(room.id):
+    if room.id in context.subportfolios[0].positions:
       position = context.subportfolios[0].positions[room.id]
       room.stockCount = position.total_amount
 
     if room.tradeOrder != None:
       ordersDic = get_orders(order_id=room.tradeOrder.id)
-      if ordersDic.has_key(room.tradeOrder.id):
+      if room.tradeOrder.id in ordersDic:
         cur_order = ordersDic[room.tradeOrder.id]
         if cur_order.is_buy:
           room.cashLeft -= cur_order.filled * cur_order.price
