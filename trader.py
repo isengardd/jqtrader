@@ -52,7 +52,7 @@ class TraderParam:
     self.KDJ_MONTH_AVG_COUNT = 40 # KDJ每日月均线缓存数（前X天的月KDJ列表,用于计算平均值）
     self.KDJ_WEEK_AVG_COUNT = 10 # KDJ每日周均线缓存数
     self.MACD_PRE_MONTH_COUNT = 2 # MACD月线缓存数
-    self.MACD_PRE_WEEK_COUNT = 2 # MACD周线缓存数
+    self.MACD_PRE_WEEK_COUNT = 10 # MACD周线缓存数
     # k线参数
     self.KLINE_BAR_MONTH_DAY = 40 # k线月线的天数
     self.KLINE_BAR_WEEK_DAY = 10 # k线周线的天数
@@ -347,6 +347,28 @@ class StockData:
       return self.curMacdDiffWeek - self.preMacdDiffWeeks[1]
     return self.preMacdDiffWeeks[index - 1] - self.preMacdDiffWeeks[index]
 
+  def serialPositiveMACDWeekDiffDay(self, days):
+    if days <= 0:
+      log.info("serialPositiveMACDWeekDiffDay index can not be 0")
+      return False
+    if days >= len(self.preMacdDiffWeeks):
+      log.info("serialPositiveMACDWeekDiffDay index > len(preMacdDiffWeeks)")
+      return False
+    for index in range(days):
+      if self.preMacdDiffWeeks[index] < self.preMacdDiffWeeks[index + 1]:
+        return False
+    return True
+  def serialNegetiveMACDWeekDiffDay(self, days):
+    if days <= 0:
+      log.info("serialPositiveMACDWeekDiffDay index can not be 0")
+      return False
+    if days >= len(self.preMacdDiffWeeks):
+      log.info("serialPositiveMACDWeekDiffDay index > len(preMacdDiffWeeks)")
+      return False
+    for index in range(days):
+      if self.preMacdDiffWeeks[index] >= self.preMacdDiffWeeks[index + 1]:
+        return False
+    return True
 class TradeManager:   # 交易管理
     def __init__(self):
         self.rooms = [] #交易席位
@@ -409,6 +431,7 @@ class TradeManager:   # 交易管理
                     stockData.kLineDays[0].low = cur_price
                     stockData.kLineDays[0].close = cur_price
                   stockData.curKDJDay = calcKDJ.GetKDJ(stockData.kLineDays, gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)[1]
+        # 上证周macd与前一周差值连续7天为正
         if len(self.rooms) < g.MAX_ROOM and shData.curKDJMonth < gParam.SH_STOP_BUY_KDJ_LINE:
             # 席位未满,查找买入机会
             roomsId = [room.id for room in self.rooms]
@@ -447,7 +470,7 @@ class TradeManager:   # 交易管理
                   # if monthDiff1 > 0 and monthDiff2 < 0 and monthDiff3 < 0 and monthMacdDiff > 0:
                   #   buyReason = 1
                   #   buyMsg = "monthDiff1 > 0 and monthDiff2 < 0 and monthDiff3 < 0 and monthMacdDiff > 0 and weekDiff1 > 0 and weekMacdDiff > 0"
-                  if stockData.curMacdDiffMonth > 0.00 and stockData.curKDJMonth > stockData.kdjMonthAvg + 2:
+                  if stockData.serialPositiveMACDWeekDiffDay(7) and stockData.curKDJMonth > stockData.kdjMonthAvg + 2:
                     buyReason = 2
                     buyMsg = "stockData.curMacdDiffMonth > 1.00 and stockData.curKDJMonth > stockData.kdjMonthAvg + 2"
                   if buyReason > 0:
@@ -582,7 +605,7 @@ class TradeRoom:    #交易席位
       sellReason = 0
       sellMsg = ""
       # 月线反转，判定为卖出
-      if stockData.curKDJMonth < stockData.kdjMonthAvg - 4.50:
+      if stockData.curKDJMonth < stockData.kdjMonthAvg - 4.50 or stockData.serialNegetiveMACDWeekDiffDay(7):
         sellReason = 1
         sellMsg = "stockData.curKDJMonth < stockData.kdjMonthAvg - 4.50"
       if sellReason > 0:
