@@ -24,6 +24,10 @@ def GetDayTimeStamp(dt, deltaDay):
   tt = time.mktime(tp) + deltaDay * 86400
   return int(tt)
 
+def GetStockName(stock_id):
+  securityInfo = get_security_info(stock_id)
+  return securityInfo.display_name
+
 class TimeRecord:
   def __init__(self):
     self.startTime = 0

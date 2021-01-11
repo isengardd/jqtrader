@@ -9,6 +9,7 @@ from kuanke.user_space_api import *
 class StockData:
   def __init__(self, gParam):
     self.id = ''
+    self.name = ''
     self.publishDays = 0 # 发行时间
     self.kLineDays = [] # 日k线缓存
     self.preKDJDays = [float(0.00)] * gParam.KDJ_PRE_DAY_COUNT
@@ -166,10 +167,12 @@ class DataFactory:
       if publishDays < self.gParam.MIN_PUBLISH_DAYS:
         stockData = StockData(self.gParam)
         stockData.id = stock
+        stockData.name = GetStockName(stock)
         stockData.publishDays = publishDays
         dicStockData[stock] = stockData
         continue
       stockData = self.calcStockData(stock, rowIndexList, klineList, -1)
+      stockData.name = GetStockName(stock)
       stockData.publishDays = publishDays
       if self.gParam.PRODUCT:
         stockData.kdjMonthAvg = self.getKDJMonthAvg(rowIndexList, klineList, self.gParam.KDJ_MONTH_AVG_COUNT)
