@@ -51,8 +51,9 @@ gParam = TraderParam()
 def initialize(context):
   # log.info(g.securities)
   gParam = TraderParam()
-
-  g.securities = get_all_securities(['stock'])._stat_axis.values.tolist()
+  
+  # 去除688开头科创板
+  g.securities = [x for x in get_all_securities(['stock'])._stat_axis.values.tolist() if not x.startswith('688')]
   set_universe(g.securities)
   # 设定沪深300作为基准
   set_benchmark('000300.XSHG')
@@ -65,6 +66,7 @@ def handle_data(context, data):
 def before_trading_start(context):
   # 初始化 rsi 和 kdj 数据
   dataFactory = DataFactory(gParam)
+  dataFactory.openLog = False
 
   validCount = 0
   log.info("total stock: {count}".format(count=len(g.securities)))

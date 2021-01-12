@@ -110,6 +110,7 @@ class StockData:
 class DataFactory:
   def __init__(self, gParam):
     self.gParam = gParam
+    self.openLog = True
 
   def genAllStockData(self, securities, context, preStockDatas):
     '''
@@ -207,11 +208,12 @@ class DataFactory:
           stockData.kdjWeekAvg = sum(stockData.kdjWeekAvgList[:self.gParam.KDJ_WEEK_AVG_COUNT]) / self.gParam.KDJ_WEEK_AVG_COUNT
       preDayOpen = klineList['open'][len(rowIndexList) - 1] if len(rowIndexList) > 0 else 0
       preDayClose = klineList['close'][len(rowIndexList) - 1] if len(rowIndexList) > 0 else 0
-      log.info("id = {id}, pub={publishDays}, pre_open={preDayOpen}, pre_close={preDayClose} \n pre_macd_diff_m={pre_macd_diff_m}, macd_diff_m={macd_diff_m}, pre_macd_diff_w={pre_macd_diff_w}, macd_diff_w={macd_diff_w}, k-4={pre_kdj4},k-3={pre_kdj3}, k-2={pre_kdj2}, k-1={pre_kdj1}, kdj_m = {kdj_m}, kdj_day_mavg = {kdj_day_mavg}, kdj_w = {kdj_w}, kdj_day_wavg = {kdj_day_wavg},kdj_d = {kdj_d}"\
-      .format(id = stockData.id, publishDays = stockData.publishDays, \
-      preDayOpen = preDayOpen, preDayClose = preDayClose, pre_macd_diff_w=stockData.preMacdDiffWeeks[1], macd_diff_w=stockData.preMacdDiffWeeks[0],\
-      pre_macd_diff_m=stockData.preMacdDiffMonths[1], macd_diff_m=stockData.preMacdDiffMonths[0], kdj_m = stockData.preKDJMonths[0], kdj_day_mavg = stockData.kdjMonthAvg, pre_kdj4 = stockData.preKDJMonths[4], pre_kdj3 = stockData.preKDJMonths[3], \
-      pre_kdj2 = stockData.preKDJMonths[2], pre_kdj1 = stockData.preKDJMonths[1], kdj_w = stockData.preKDJWeeks[0], kdj_day_wavg = stockData.kdjWeekAvg,kdj_d = stockData.preKDJDays[0]))
+      if self.openLog == True:
+        log.info("id = {id}, pub={publishDays}, pre_open={preDayOpen}, pre_close={preDayClose} \n pre_macd_diff_m={pre_macd_diff_m}, macd_diff_m={macd_diff_m}, pre_macd_diff_w={pre_macd_diff_w}, macd_diff_w={macd_diff_w}, k-4={pre_kdj4},k-3={pre_kdj3}, k-2={pre_kdj2}, k-1={pre_kdj1}, kdj_m = {kdj_m}, kdj_day_mavg = {kdj_day_mavg}, kdj_w = {kdj_w}, kdj_day_wavg = {kdj_day_wavg},kdj_d = {kdj_d}"\
+        .format(id = stockData.id, publishDays = stockData.publishDays, \
+        preDayOpen = preDayOpen, preDayClose = preDayClose, pre_macd_diff_w=stockData.preMacdDiffWeeks[1], macd_diff_w=stockData.preMacdDiffWeeks[0],\
+        pre_macd_diff_m=stockData.preMacdDiffMonths[1], macd_diff_m=stockData.preMacdDiffMonths[0], kdj_m = stockData.preKDJMonths[0], kdj_day_mavg = stockData.kdjMonthAvg, pre_kdj4 = stockData.preKDJMonths[4], pre_kdj3 = stockData.preKDJMonths[3], \
+        pre_kdj2 = stockData.preKDJMonths[2], pre_kdj1 = stockData.preKDJMonths[1], kdj_w = stockData.preKDJWeeks[0], kdj_day_wavg = stockData.kdjWeekAvg,kdj_d = stockData.preKDJDays[0]))
 
       dicStockData[stock] = stockData
     return dicStockData
