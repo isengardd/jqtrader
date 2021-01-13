@@ -24,6 +24,9 @@ def GetDayTimeStamp(dt, deltaDay):
   tt = time.mktime(tp) + deltaDay * 86400
   return int(tt)
 
+def GetDayTimeStr(dt, deltaDay):
+  return (dt - datetime.timedelta(days=deltaDay)).strftime("%Y-%m-%d")
+
 def GetStockName(stock_id):
   securityInfo = get_security_info(stock_id)
   return securityInfo.display_name

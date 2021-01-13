@@ -71,10 +71,6 @@ def before_trading_start(context):
   validCount = 0
   log.info("total stock: {count}".format(count=len(g.securities)))
   for stock in g.securities:
-    pre_date = (context.current_dt - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-    klineList = None
-    rowIndexList = None # 行索引是时间戳
-
     # 先获取财务数据
     q = query(valuation).filter(
       valuation.code == stock
@@ -87,10 +83,18 @@ def before_trading_start(context):
     if not int(df['pe_ratio'][0]) < gParam.PE_RATIO:
       continue
 
+    # 去掉st
+    stockName = GetStockName(stock)
+    if stockName.startswith('ST') or stockName.startswith('*ST'):
+      continue
+
     # 回测环境专用
     dicStockData = dataFactory.genAllStockData([stock], context, None)
     if stock in dicStockData:
       stockData = dicStockData[stock]
+      # 至少上市56周
+      if stockData == None or stockData.publishDays < 280:
+        continue
       # 周线小于20
       if stockData.preKDJWeeks[0] <= 20.0:
         log.info("id={id}, name={name}, week_kdj={w_kdj}".format(id=stock, name=stockData.name, w_kdj=stockData.preKDJWeeks[0]))
