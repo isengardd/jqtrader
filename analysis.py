@@ -22,7 +22,7 @@ class TraderParam:
     self.MULTI_STATUS_MACHINE = False # 是否使用多层状态机
     self.KLINE_FREQUENCY = "1d"
     self.KLINE_LENGTH = 60       # 月K线数量， 最多取 60个月数据
-    self.MIN_PUBLISH_DAYS = 24 * 19 # 最少上市天数
+    self.MIN_PUBLISH_DAYS = 56 * 5 # 最少上市天数
     self.ROOM_MAX = 10 # 要交易的股票数
     self.BUY_INTERVAL_DAY = 1
     self.SELL_INTERVAL_DAY = 1
@@ -42,8 +42,8 @@ class TraderParam:
     self.MACD_PRE_MONTH_COUNT = 2 # MACD月线缓存数
     self.MACD_PRE_WEEK_COUNT = 10 # MACD周线缓存数
     # k线参数
-    self.KLINE_BAR_MONTH_DAY = 40 # k线月线的天数
-    self.KLINE_BAR_WEEK_DAY = 10 # k线周线的天数
+    self.KLINE_BAR_MONTH_DAY = 20 # k线月线的天数
+    self.KLINE_BAR_WEEK_DAY = 5 # k线周线的天数
 
 gParam = TraderParam()
 
@@ -93,8 +93,8 @@ def before_trading_start(context):
     if stock in dicStockData:
       stockData = dicStockData[stock]
       # 至少上市56周
-      if stockData == None or stockData.publishDays < 280:
+      if stockData == None or stockData.publishDays < gParam.MIN_PUBLISH_DAYS:
         continue
       # 周线小于20
       if stockData.preKDJWeeks[0] <= 20.0:
-        log.info("id={id}, name={name}, week_kdj={w_kdj}".format(id=stock, name=stockData.name, w_kdj=stockData.preKDJWeeks[0]))
+        log.info("id={id}, name={name}, week_kdj={w_kdj}, pre_kdj={w_prekdj}".format(id=stock, name=stockData.name, w_kdj=stockData.preKDJWeeks[0], w_prekdj=stockData.preKDJWeeks[1]))
