@@ -42,6 +42,7 @@ class TraderParam:
     self.MACD_PRE_MONTH_COUNT = 2 # MACD月线缓存数
     self.MACD_PRE_WEEK_COUNT = 10 # MACD周线缓存数
     # k线参数
+    self.KLINE_SPLIT_TYPE = SPLIT_KLINE_NORMAL
     self.KLINE_BAR_MONTH_DAY = 20 # k线月线的天数
     self.KLINE_BAR_WEEK_DAY = 5 # k线周线的天数
 

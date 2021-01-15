@@ -294,16 +294,28 @@ class DataFactory:
         if idx + 1 < len(rowIndexList):
             # 这里取下一天的比较
             pre_timedate = rowIndexList[idx + 1]
-        # 跨月，而且上月有数据，结算上一个k线图数据
-        if kLineMonth.day >= self.gParam.KLINE_BAR_MONTH_DAY:
-          stockData.kLineMonths.append(kLineMonth)
-          kLineMonth = None
-        # 跨周，而且上周有数据
-        if kLineWeek and kLineWeek.day >= self.gParam.KLINE_BAR_WEEK_DAY:
-          stockData.kLineWeeks.append(kLineWeek)
-          kLineWeek = None
+        if self.gParam.KLINE_SPLIT_TYPE == SPLIT_KLINE_FIXED_DAY:
+          # 跨月，而且上月有数据，结算上一个k线图数据
+          if kLineMonth and kLineMonth.day >= self.gParam.KLINE_BAR_MONTH_DAY:
+            stockData.kLineMonths.append(kLineMonth)
+            kLineMonth = None
+          # 跨周，而且上周有数据
+          if kLineWeek and kLineWeek.day >= self.gParam.KLINE_BAR_WEEK_DAY:
+            stockData.kLineWeeks.append(kLineWeek)
+            kLineWeek = None
+        elif self.gParam.KLINE_SPLIT_TYPE == SPLIT_KLINE_NORMAL:
+          # 跨自然月
+          if kLineMonth and time_date.month != pre_timedate.month:
+            stockData.kLineMonths.append(kLineMonth)
+            kLineMonth = None
+          # 跨自然周
+          if kLineWeek and time_date.isocalendar()[1] != pre_timedate.isocalendar()[1]:
+            stockData.kLineWeeks.append(kLineWeek)
+            kLineWeek = None
+
         # 每天都是跨天
         kLineDay = None
+
         if kLineMonth == None:
             kLineMonth = KLineBar()
         if kLineWeek == None and len(stockData.kLineWeeks) < self.gParam.KLINE_LENGTH:

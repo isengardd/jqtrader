@@ -13,6 +13,10 @@ SKILL_MACD = 0
 SKILL_RSI = 1
 SKILL_KDJ = 2
 
+# 分割kline的方法
+SPLIT_KLINE_NORMAL = 1 #按自然日期月，周
+SPLIT_KLINE_FIXED_DAY = 2 #按固定天数
+
 SH_CODE = '000001.XSHG' # 上证股票代码
 
 def LowStockCount(num):
