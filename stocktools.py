@@ -56,7 +56,7 @@ class CalcCommon:
   def GetEMA(self, valueList, N):
     if len(valueList) == 0:
       log.info("error: GetEMA: N = {N}, but valueList is empty".format(N = N))
-      return float(0)
+      return None
     # minLen = self.GetEMA_K(N)
     # if len(valueList) < minLen:
     #   log.info("GetEMA: N = {0}, minLen = {1}, len(val) = {2}".format(N, minLen, len(valueList)))
@@ -65,7 +65,7 @@ class CalcCommon:
     emaFactorList = self.GetEMAFactorList(N)
     if len(emaFactorList) == 0:
       log.info("GetEMA: len(emaFactorList) == 0")
-      return float(0)
+      return None
     alpha = self.GetAlpha(N)
     ema = float(0)
     for i in range(len(emaFactorList)):
@@ -122,23 +122,28 @@ class CalcKDJ(CalcCommon):
       return (ERR_DATA, ERR_DATA)
     # 这里只返回 (k,d)
     rsvDay = int(self.GetEMA_K(M2) + self.GetEMA_K(M1)) + int(N)
-    if len(kLine) < rsvDay:
-      log.info("GetKDJ: len(kLine) = {0}, rsvDay = {1}".format(len(kLine), rsvDay))
-      return (ERR_DATA, ERR_DATA)
+    if rsvDay > len(kLine):
+        rsvDay = len(kLine)
     rsvList = [float(0) for i in range(rsvDay)]
     for i in range(rsvDay):
-      rsvList[i] = self.GetRSV(kLine[i : int(N) + i], N)
+      rsvList[i] = self.GetRSV(kLine[i : min(int(N) + i, len(kLine))], N)
     # 算出K值
     kDay = int(self.GetEMA_K(M2))
     if kDay < 2:
       log.info("GetKDJ: kDay < 2, M2 = {0}".format(M2))
       return (ERR_DATA, ERR_DATA)
     kList = [float(0) for i in range(kDay)]
-    kList[len(kList)-1] = self.GetEMA(rsvList[len(kList)-1 : len(kList)+int(self.GetEMA_K(M1))-1], M1)
+    if len(rsvList) < len(kList):
+      kList[len(kList) - 1] = 100.00
+    else:
+      kList[len(kList)-1] = self.GetEMA(rsvList[len(kList)-1 : min(len(rsvList), len(kList)+int(self.GetEMA_K(M1))-1)], M1)
+      if kLine[len(kList)-1] is None:
+        kLine[len(kList)-1] = 100.00
     for i in range(len(kList)-2, -1, -1):
-      if math.isnan(kList[i+1]):
-        kList[i+1] = 50.00
-      kList[i] = self.GetAlpha(M1)*rsvList[i] + kList[i+1]*(1-self.GetAlpha(M1))
+      if i < len(rsvList):
+        kList[i] = self.GetAlpha(M1)*rsvList[i] + kList[i+1]*(1-self.GetAlpha(M1))
+      else:
+        kList[i] = 100.00
     # 算出d值
     dVal = self.GetEMA(kList, M2)
     # print kList
