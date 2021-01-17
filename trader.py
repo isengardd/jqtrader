@@ -35,7 +35,7 @@ class TraderParam:
     self.KDJ_MONTH_AVG_COUNT = 40 # KDJ每日月均线缓存数（前X天的月KDJ列表,用于计算平均值）
     self.KDJ_WEEK_AVG_COUNT = 10 # KDJ每日周均线缓存数
     self.MACD_PRE_MONTH_COUNT = 2 # MACD月线缓存数
-    self.MACD_PRE_WEEK_COUNT = 10 # MACD周线缓存数
+    self.MACD_DIFF_PRE_WEEK_COUNT = 10 # MACD周线缓存数
     # k线参数
     self.KLINE_SPLIT_TYPE = SPLIT_KLINE_FIXED_DAY
     self.KLINE_BAR_MONTH_DAY = 40 # k线月线的天数

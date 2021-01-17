@@ -16,7 +16,7 @@ class StockData:
     self.curKDJDay = float(0.00)
     self.kLineWeeks = [] # 周k线缓存
     self.preKDJWeeks = [float(0.00)] * gParam.KDJ_PRE_WEEK_COUNT
-    self.preMacdDiffWeeks = [float(0.00)] * gParam.MACD_PRE_WEEK_COUNT
+    self.preMacdDiffWeeks = [float(0.00)] * gParam.MACD_DIFF_PRE_WEEK_COUNT
     self.curMacdDiffWeek = float(0.00)
     self.curKDJWeek = float(0.00)
     self.kdjWeekAvgList = [float(0.00)] * gParam.KDJ_WEEK_AVG_COUNT # 实际操作中多缓存一天,减少重复计算,但是平均值只取前x天
@@ -112,7 +112,7 @@ class DataFactory:
     self.gParam = gParam
     self.openLog = True
 
-  def genAllStockData(self, securities, context, preStockDatas):
+  def genAllStockData(self, securities, cur_datetime, preStockDatas):
     '''
     获取所有股票的当前数据
 
@@ -120,7 +120,7 @@ class DataFactory:
     ---------
     gParam: 脚本参数
     securities: 股票池
-    context: 上下文
+    cur_datetime: 当前日期
     preStockData: 前一天的缓存数据
 
     Returns: 新计算出的当日stockdata
@@ -135,7 +135,7 @@ class DataFactory:
       # 这样前后两天执行时的rsi和kdj不一致。可能出现前一天不满足买入卖出条件，但是
       # 第二天一开盘就又满足了条件
       # 这里注意end_date需要传入前一天日期
-      pre_date = (context.current_dt - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+      pre_date = (cur_datetime - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
       klineList = None
       rowIndexList = None # 行索引是时间戳
       if self.gParam.PRODUCT:
@@ -155,6 +155,7 @@ class DataFactory:
         # get_bars默认跳过停牌日
         klineList = get_bars(security=stock,
           count=self.gParam.KLINE_LENGTH * 30,
+          end_dt=cur_datetime.strftime("%Y-%m-%d"),
           fields=['date', 'open', 'close', 'high', 'low'],
           unit=self.gParam.KLINE_FREQUENCY,
           include_now=False
@@ -260,7 +261,7 @@ class DataFactory:
     # week
     for n in range(self.gParam.KDJ_PRE_WEEK_COUNT):
       stockData.preKDJWeeks[n] = calcKDJ.GetKDJ(stockData.kLineWeeks[n:], self.gParam.KDJ_PARAM1, self.gParam.KDJ_PARAM2, self.gParam.KDJ_PARAM3)[1]
-    for n in range(self.gParam.MACD_PRE_WEEK_COUNT):
+    for n in range(self.gParam.MACD_DIFF_PRE_WEEK_COUNT):
       stockData.preMacdDiffWeeks[n] = calcMACD.GetDiff(stockData.kLineWeeks[n:])
     stockData.curKDJWeek = stockData.preKDJWeeks[0]
     stockData.curMacdDiffWeek = stockData.preMacdDiffWeeks[0]

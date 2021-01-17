@@ -61,15 +61,17 @@ class CalcCommon:
     # if len(valueList) < minLen:
     #   log.info("GetEMA: N = {0}, minLen = {1}, len(val) = {2}".format(N, minLen, len(valueList)))
     #   return float(0)
-
     emaFactorList = self.GetEMAFactorList(N)
+    #if len(emaFactorList) > len(valueList):
+    #  emaFactorList = self.GetEMAFactorList(int(len(valueList) / EMA_K_FACTOR - 1))
     if len(emaFactorList) == 0:
       log.info("GetEMA: len(emaFactorList) == 0")
       return None
+
     alpha = self.GetAlpha(N)
-    ema = float(0)
+    ema = float(0.0000)
     for i in range(len(emaFactorList)):
-      val = float(valueList[i]) if len(valueList) > i else 0
+      val = float(valueList[i]) if len(valueList) > i else valueList[len(valueList) - 1]
       ema += (float(val) * emaFactorList[i])
 
     ema = ema*alpha
@@ -80,9 +82,9 @@ class CalcCommon:
 
   def GetAlpha(self, N):
     if self.skillType == SKILL_MACD:
-      return float(2) / float(N+1)
+      return float(2.0000) / float(N+1)
     else:
-      return float(1) / float(N)
+      return float(1.0000) / float(N)
 
   def GetEMAFactorList(self, N):
     if N in self.emaFactorMap:
@@ -134,21 +136,21 @@ class CalcKDJ(CalcCommon):
       return (ERR_DATA, ERR_DATA)
     kList = [float(0) for i in range(kDay)]
     if len(rsvList) < len(kList):
-      kList[len(kList) - 1] = 100.00
+      kList[len(kList) - 1] = 100.0000
     else:
       kList[len(kList)-1] = self.GetEMA(rsvList[len(kList)-1 : min(len(rsvList), len(kList)+int(self.GetEMA_K(M1))-1)], M1)
       if kLine[len(kList)-1] is None:
-        kLine[len(kList)-1] = 100.00
+        kLine[len(kList)-1] = 100.0000
     for i in range(len(kList)-2, -1, -1):
       if i < len(rsvList):
         kList[i] = self.GetAlpha(M1)*rsvList[i] + kList[i+1]*(1-self.GetAlpha(M1))
       else:
-        kList[i] = 100.00
+        kList[i] = 100.0000
     # 算出d值
     dVal = self.GetEMA(kList, M2)
     # print kList
     # print rsvList
-    return (round(kList[0], 2), round(dVal, 2))
+    return (round(kList[0], 4), round(dVal, 4))
   def GetRSV(self, kLine, N):
     if len(kLine) < N:
       if len(kLine) == 0:
@@ -165,12 +167,12 @@ class CalcKDJ(CalcCommon):
       return ERR_DATA
 
     # print "max = {0}, min = {1}".format(max, min)
-    rsv = (kLine[0].close - min) / (max - min) * float(100)
-    if rsv < float(1):
-      rsv = float(1)
+    rsv = (kLine[0].close - min) / (max - min) * float(100.0000)
+    if rsv < float(1.0000):
+      rsv = float(1.0000)
 
-    if rsv > float(100):
-      rsv = float(100)
+    if rsv > float(100.0000):
+      rsv = float(100.0000)
 
     return rsv
   def CalcEMAFactorList(self, N):
@@ -209,7 +211,16 @@ class CalcMACD(CalcCommon):
 
   def GetDiff(self, kLine):
     closeKline = [i.close for i in kLine]
+    ema_12 = self.GetEMA(closeKline, 12)
+    if ema_12 == None:
+      return ERR_DATA
+    ema_26 = self.GetEMA(closeKline, 26)
+    if ema_26 == None:
+      return ERR_DATA
     return self.GetEMA(closeKline, 12) - self.GetEMA(closeKline, 26)
+
+  def GetDEA(self, diffLine):
+    return self.GetEMA(diffLine, 9)
 
 class KLineBar:
   def __init__(self):
