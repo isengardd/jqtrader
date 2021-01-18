@@ -112,6 +112,4 @@ def before_trading_start(context):
       if stockData.preKDJMonths[0] <= 65 and \
         stockData.kdjMonthAvgList[0] > stockData.kdjMonthAvgList[1] and \
         stockData.kdjMonthAvgList[2] > stockData.kdjMonthAvgList[1]:
-        newDicStockData = dataFactory.genAllStockData([stock], context.current_dt + datetime.timedelta(days=30), None)
-        newStockData = newDicStockData[stock]
-        log.info("id={id}, name={name}, price={cur_price}, twoMonth_price={price_2}".format(id=stock, name=stockData.name, cur_price=stockData.kLineDays[0].close, price_2=newStockData.kLineDays[0].close))
+        log.info("id={id}, name={name}, price={cur_price}, twoMonth_price={price_2}".format(id=stock, name=stockData.name, cur_price=stockData.kLineDays[0].close, price_2=dataFactory.GetStockPrice(stock, datetime.datetime(2020, 12, 6))))

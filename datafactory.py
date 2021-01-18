@@ -112,6 +112,29 @@ class DataFactory:
     self.gParam = gParam
     self.openLog = True
 
+
+  def GetStockPrice(self, stock, dt):
+    if self.gParam.PRODUCT:
+      klineList = get_price(
+        security=stock,
+        count=1, # 这里是天数
+        #end_date=datetime.datetime.now().strftime("%Y-%m-%d"),
+        end_date=dt.strftime("%Y-%m-%d"),
+        frequency="1d",
+        fields=['open', 'close', 'high', 'low'],
+        skip_paused=True
+      )
+      return klineList['close'][0] if len(klineList['close']) > 0 else 0
+    else:
+      klineList = get_bars(security=stock,
+        count=1,
+        end_dt=dt.strftime("%Y-%m-%d"),
+        fields=['open', 'close', 'high', 'low'],
+        unit=self.gParam.KLINE_FREQUENCY,
+        include_now=True
+      )
+      return klineList['close'][0] if len(klineList['close']) > 0 else 0
+
   def genAllStockData(self, securities, cur_datetime, preStockDatas):
     '''
     获取所有股票的当前数据
@@ -155,10 +178,10 @@ class DataFactory:
         # get_bars默认跳过停牌日
         klineList = get_bars(security=stock,
           count=self.gParam.KLINE_LENGTH * 30,
-          end_dt=cur_datetime.strftime("%Y-%m-%d"),
+          end_dt=pre_date,
           fields=['date', 'open', 'close', 'high', 'low'],
           unit=self.gParam.KLINE_FREQUENCY,
-          include_now=False
+          include_now=True
         )
         # 回测环境的时间戳是当日0点！！ datetime.date类型
         rowIndexList = klineList['date']
