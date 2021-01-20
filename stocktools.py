@@ -35,6 +35,10 @@ def GetStockName(stock_id):
   securityInfo = get_security_info(stock_id)
   return securityInfo.display_name
 
+def GetStockStart(stock_id):
+  securityInfo = get_security_info(stock_id)
+  return securityInfo.start_date #datetime.date
+
 class TimeRecord:
   def __init__(self):
     self.startTime = 0

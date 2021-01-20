@@ -161,11 +161,13 @@ class DataFactory:
       pre_date = (cur_datetime - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
       klineList = None
       rowIndexList = None # 行索引是时间戳
+      security_info = get_security_info(stock)
       if self.gParam.PRODUCT:
+        #todo: 这里取一下上市日期
         klineList = get_price(
           security=stock,
-          count=self.gParam.KLINE_LENGTH * 30, # 这里是天数
-          #end_date=datetime.datetime.now().strftime("%Y-%m-%d"),
+          #count=self.gParam.KLINE_LENGTH * 30, # 这里是天数
+          start_date=security_info.start_date if security_info.start_date.year >= 2007 else datetime.datetime(2007, 1, 1).date(),
           end_date=pre_date,
           frequency=self.gParam.KLINE_FREQUENCY,
           fields=['open', 'close', 'high', 'low'],
@@ -178,26 +180,26 @@ class DataFactory:
         # get_bars默认跳过停牌日
         klineList = get_bars(security=stock,
           count=self.gParam.KLINE_LENGTH * 30,
-          end_dt=pre_date,
+          end_dt=cur_datetime.strftime("%Y-%m-%d"),
           fields=['date', 'open', 'close', 'high', 'low'],
           unit=self.gParam.KLINE_FREQUENCY,
-          include_now=True
+          include_now=False
         )
         # 回测环境的时间戳是当日0点！！ datetime.date类型
         rowIndexList = klineList['date']
-
+      #log.info(len(rowIndexList), rowIndexList[:3],rowIndexList[len(rowIndexList)-3:])
       #print klineList._stat_axis.values.tolist()  # 取行名称
       # columns.values.tolist()   # 取列名称
       publishDays = self.getStockPublishDay(rowIndexList, klineList)
       if publishDays < self.gParam.MIN_PUBLISH_DAYS:
         stockData = StockData(self.gParam)
         stockData.id = stock
-        stockData.name = GetStockName(stock)
+        stockData.name = security_info.display_name
         stockData.publishDays = publishDays
         dicStockData[stock] = stockData
         continue
       stockData = self.calcStockData(stock, rowIndexList, klineList, -1)
-      stockData.name = GetStockName(stock)
+      stockData.name = security_info.display_name
       stockData.publishDays = publishDays
       if self.gParam.PRODUCT:
         stockData.kdjMonthAvg = self.getKDJMonthAvg(rowIndexList, klineList, self.gParam.KDJ_MONTH_AVG_COUNT)
