@@ -300,9 +300,9 @@ class DataFactory:
     stockData = StockData(self.gParam)
     stockData.id = stockId
     # 按自然月和周划分k线柱
-    kLineMonth = KLineBar()
-    kLineWeek = KLineBar()
-    kLineDay = KLineBar()
+    kLineMonth = None
+    kLineWeek = None
+    kLineDay = None
     #print(len(klineList._stat_axis.values.tolist()))
     # 从昨日开始往前遍历数据
     for idx in range(len(rowIndexList)+start, -1, -1):
@@ -344,10 +344,14 @@ class DataFactory:
 
         if kLineMonth == None:
             kLineMonth = KLineBar()
+            kLineMonth.endTime = time_date
+            #log.info(time_date)
         if kLineWeek == None and len(stockData.kLineWeeks) < self.gParam.KLINE_LENGTH:
             kLineWeek = KLineBar()
+            kLineWeek.endTime = time_date
         if kLineDay == None and len(stockData.kLineDays) < self.gParam.KLINE_LENGTH:
             kLineDay = KLineBar()
+            kLineDay.endTime = time_date
 
         k_open = klineList['open'][idx]
         k_close = klineList['close'][idx]
@@ -361,14 +365,15 @@ class DataFactory:
         if kLineDay != None:
           kLineDay.UpdatePreDayData(k_open, k_close, k_high, k_low)
           stockData.kLineDays.append(kLineDay)
+          kLineDay = None
 
-    if len(stockData.kLineMonths) < self.gParam.KLINE_LENGTH and len(stockData.kLineMonths) > 0:
-        lastKline = stockData.kLineMonths[-1]
-        for i in range(self.gParam.KLINE_LENGTH - len(stockData.kLineMonths)):
-            kLineMonth = KLineBar()
-            kLineMonth.open = lastKline.open
-            kLineMonth.close = lastKline.close
-            kLineMonth.high = lastKline.high
-            kLineMonth.low = lastKline.low
-            stockData.kLineMonths.append(kLineMonth)
+    # if len(stockData.kLineMonths) < self.gParam.KLINE_LENGTH and len(stockData.kLineMonths) > 0:
+    #     lastKline = stockData.kLineMonths[-1]
+    #     for i in range(self.gParam.KLINE_LENGTH - len(stockData.kLineMonths)):
+    #         kLineMonth = KLineBar()
+    #         kLineMonth.open = lastKline.open
+    #         kLineMonth.close = lastKline.close
+    #         kLineMonth.high = lastKline.high
+    #         kLineMonth.low = lastKline.low
+    #         stockData.kLineMonths.append(kLineMonth)
     return stockData

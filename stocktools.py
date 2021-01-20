@@ -130,6 +130,8 @@ class CalcKDJ(CalcCommon):
     rsvDay = int(self.GetEMA_K(M2) + self.GetEMA_K(M1)) + int(N)
     if rsvDay > len(kLine):
         rsvDay = len(kLine)
+    if rsvDay == 0:
+      return 100.0000, 100.0000
     rsvList = [float(0) for i in range(rsvDay)]
     for i in range(rsvDay):
       rsvList[i] = self.GetRSV(kLine[i : min(int(N) + i, len(kLine))], N)
@@ -214,6 +216,8 @@ class CalcMACD(CalcCommon):
     self.skillType = SKILL_MACD
 
   def GetDiff(self, kLine):
+    if len(kLine) == 0:
+      return ERR_DATA
     closeKline = [i.close for i in kLine]
     ema_12 = self.GetEMA(closeKline, 12)
     if ema_12 == None:
@@ -221,7 +225,7 @@ class CalcMACD(CalcCommon):
     ema_26 = self.GetEMA(closeKline, 26)
     if ema_26 == None:
       return ERR_DATA
-    return self.GetEMA(closeKline, 12) - self.GetEMA(closeKline, 26)
+    return ema_12 - ema_26
 
   def GetDEA(self, diffLine):
     return self.GetEMA(diffLine, 9)
@@ -232,7 +236,7 @@ class KLineBar:
     self.close = float(0.00)
     self.high = float(0.00)
     self.low = float(0.00)
-    self.timestamp = 0
+    self.endTime = None #datetime.datetime(2020, 11, 30).date()
     self.day = 0 # 统计的天数
 
   def UpdatePreDayData(self, open, close, high, low):
