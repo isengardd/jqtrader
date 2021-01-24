@@ -308,12 +308,6 @@ class DataFactory:
     for idx in range(len(rowIndexList)+start, -1, -1):
         if numpy.isnan(klineList['open'][idx]):
             # 已经取到未上市的日期，后面的不再取了
-            if kLineMonth != None:
-                stockData.kLineMonths.append(kLineMonth)
-            if kLineWeek != None:
-                stockData.kLineWeeks.append(kLineWeek)
-            if kLineDay != None:
-                stockData.kLineDays.append(kLineDay)
             break
         time_date = rowIndexList[idx]
         pre_timedate = time_date
@@ -366,7 +360,13 @@ class DataFactory:
           kLineDay.UpdatePreDayData(k_open, k_close, k_high, k_low)
           stockData.kLineDays.append(kLineDay)
           kLineDay = None
-
+          
+    if kLineMonth != None:
+        stockData.kLineMonths.append(kLineMonth)
+    if kLineWeek != None:
+        stockData.kLineWeeks.append(kLineWeek)
+    if kLineDay != None:
+        stockData.kLineDays.append(kLineDay)
     # if len(stockData.kLineMonths) < self.gParam.KLINE_LENGTH and len(stockData.kLineMonths) > 0:
     #     lastKline = stockData.kLineMonths[-1]
     #     for i in range(self.gParam.KLINE_LENGTH - len(stockData.kLineMonths)):

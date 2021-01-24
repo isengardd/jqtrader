@@ -22,7 +22,7 @@ class TraderParam:
     self.MULTI_STATUS_MACHINE = False # 是否使用多层状态机
     self.KLINE_FREQUENCY = "1d"
     self.KLINE_LENGTH = 150       # 月K线数量， 最多取 60个月数据
-    self.MIN_PUBLISH_DAYS = 56 * 5 # 最少上市天数
+    self.MIN_PUBLISH_DAYS = 28 * 5 # 最少上市天数
     self.ROOM_MAX = 10 # 要交易的股票数
     self.BUY_INTERVAL_DAY = 1
     self.SELL_INTERVAL_DAY = 1
@@ -103,6 +103,9 @@ def before_trading_start(context):
       #if pe_ratio < 5:
       #  log.info("id={id}, name={name}, pe={pe_ratio}".format(id=stock, name=stockData.name, pe_ratio=pe_ratio))
 
+      # 月线上涨，周线背离（股价下降，周kdj上涨）买入
+      # 周线顶背离（股价上升，周kdj下降，或者周kdj大于80，周线下降）
+
       # 周线小于20
       #if stockData.preKDJWeeks[0] <= 20.0 and \
       #  stockData.preKDJWeeks[0] > stockData.preKDJWeeks[1] and \
@@ -112,4 +115,6 @@ def before_trading_start(context):
       if stockData.preKDJMonths[0] <= 65 and \
         stockData.kdjMonthAvgList[0] > stockData.kdjMonthAvgList[1] and \
         stockData.kdjMonthAvgList[2] > stockData.kdjMonthAvgList[1]:
-        log.info("id={id}, name={name}, price={cur_price}, twoMonth_price={price_2}".format(id=stock, name=stockData.name, cur_price=stockData.kLineDays[0].close, price_2=dataFactory.GetStockPrice(stock, datetime.datetime(2020, 12, 6))))
+        curPrice = stockData.kLineDays[0].close
+        twoMonthPrice = dataFactory.GetStockPrice(stock, datetime.datetime(2020, 12, 6))
+        log.info("id={id}, name={name}, price={cur_price}, twoMonth_price={price_2}".format(id=stock, name=stockData.name, cur_price=curPrice, price_2=twoMonthPrice))

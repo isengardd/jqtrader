@@ -19,6 +19,9 @@ SPLIT_KLINE_FIXED_DAY = 2 #按固定天数
 
 SH_CODE = '000001.XSHG' # 上证股票代码
 
+def ObjAttrs(obj):
+  return '  '.join(['{0}: {1}'.format(item[0], item[1]) for item in obj.__dict__.items()])
+
 def LowStockCount(num):
   return int(num/100.00)*100
 
@@ -130,7 +133,7 @@ class CalcKDJ(CalcCommon):
     rsvDay = int(self.GetEMA_K(M2) + self.GetEMA_K(M1)) + int(N)
     if rsvDay > len(kLine):
         rsvDay = len(kLine)
-    if rsvDay == 0:
+    if rsvDay <= 1:
       return 100.0000, 100.0000
     rsvList = [float(0) for i in range(rsvDay)]
     for i in range(rsvDay):
@@ -148,14 +151,16 @@ class CalcKDJ(CalcCommon):
       if kLine[len(kList)-1] is None:
         kLine[len(kList)-1] = 100.0000
     for i in range(len(kList)-2, -1, -1):
-      if i < len(rsvList):
+      if i < len(rsvList) - 1:
         kList[i] = self.GetAlpha(M1)*rsvList[i] + kList[i+1]*(1-self.GetAlpha(M1))
       else:
         kList[i] = 100.0000
     # 算出d值
     dVal = self.GetEMA(kList, M2)
-    # print kList
-    # print rsvList
+    #if len(kLine) == 2:
+    #  log.info([ObjAttrs(obj) for obj in kLine])
+    #  log.info(kList)
+    #  log.info(rsvList)
     return (round(kList[0], 4), round(dVal, 4))
   def GetRSV(self, kLine, N):
     if len(kLine) < N:
