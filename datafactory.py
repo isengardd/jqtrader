@@ -84,6 +84,54 @@ class StockData:
       return self.curMacdDiffWeek - self.preMacdDiffWeeks[1]
     return self.preMacdDiffWeeks[index - 1] - self.preMacdDiffWeeks[index]
 
+  def serialPositiveKDJWeekDay(self, days):
+    if days <= 0:
+      log.info("serialPositiveKDJWeekDay index can not be 0")
+      return False
+    if days >= len(self.preKDJWeeks):
+      log.info("serialPositiveKDJWeekDay index > len(preKDJWeeks)")
+      return False
+    for index in range(days):
+      if self.preKDJWeeks[index] < self.preKDJWeeks[index + 1]:
+        return False
+    return True
+
+  def serialNegetiveKDJWeekDay(self, days):
+    if days <= 0:
+      log.info("serialNegetiveKDJWeekDay index can not be 0")
+      return False
+    if days >= len(self.preKDJWeeks):
+      log.info("serialNegetiveKDJWeekDay index > len(preKDJWeeks)")
+      return False
+    for index in range(days):
+      if self.preKDJWeeks[index] >= self.preKDJWeeks[index + 1]:
+        return False
+    return True
+
+  def serialPositiveKDJMonthDay(self, days):
+    if days <= 0:
+      log.info("serialPositiveKDJMonthDay index can not be 0")
+      return False
+    if days >= len(self.preKDJMonths):
+      log.info("serialPositiveKDJMonthDay index > len(preKDJMonths)")
+      return False
+    for index in range(days):
+      if self.preKDJMonths[index] < self.preKDJMonths[index + 1]:
+        return False
+    return True
+
+  def serialNegetiveKDJMonthDay(self, days):
+    if days <= 0:
+      log.info("serialNegetiveKDJMonthDay index can not be 0")
+      return False
+    if days >= len(self.preKDJMonths):
+      log.info("serialNegetiveKDJMonthDay index > len(preKDJMonths)")
+      return False
+    for index in range(days):
+      if self.preKDJMonths[index] >= self.preKDJMonths[index + 1]:
+        return False
+    return True
+
   def serialPositiveMACDWeekDiffDay(self, days):
     if days <= 0:
       log.info("serialPositiveMACDWeekDiffDay index can not be 0")

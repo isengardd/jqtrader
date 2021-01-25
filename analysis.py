@@ -105,16 +105,18 @@ def before_trading_start(context):
 
       # 月线上涨，周线背离（股价下降，周kdj上涨）买入
       # 周线顶背离（股价上升，周kdj下降，或者周kdj大于80，周线下降）
-
+      if stockData.preKDJMonths[0] <= 85 and stockData.serialPositiveKDJMonthDay(2):
+        if stockData.kLineWeeks[0].open * 0.95 > stockData.kLineWeeks[0].close and stockData.serialPositiveKDJWeekDay(2):
+          
       # 周线小于20
       #if stockData.preKDJWeeks[0] <= 20.0 and \
       #  stockData.preKDJWeeks[0] > stockData.preKDJWeeks[1] and \
       #  stockData.serialPositiveMACDWeekDiffDay(2):
       #  log.info("id={id}, name={name}, week_kdj={w_kdj}, pre_kdj={w_prekdj}".format(id=stock, name=stockData.name, w_kdj=stockData.preKDJWeeks[0], w_prekdj=stockData.preKDJWeeks[1]))
       # 月线平均上升
-      if stockData.preKDJMonths[0] <= 65 and \
-        stockData.kdjMonthAvgList[0] > stockData.kdjMonthAvgList[1] and \
-        stockData.kdjMonthAvgList[2] > stockData.kdjMonthAvgList[1]:
-        curPrice = stockData.kLineDays[0].close
-        twoMonthPrice = dataFactory.GetStockPrice(stock, datetime.datetime(2020, 12, 6))
-        log.info("id={id}, name={name}, price={cur_price}, twoMonth_price={price_2}".format(id=stock, name=stockData.name, cur_price=curPrice, price_2=twoMonthPrice))
+      # if stockData.preKDJMonths[0] <= 65 and \
+      #   stockData.kdjMonthAvgList[0] > stockData.kdjMonthAvgList[1] and \
+      #   stockData.kdjMonthAvgList[2] > stockData.kdjMonthAvgList[1]:
+      #   curPrice = stockData.kLineDays[0].close
+      #   twoMonthPrice = dataFactory.GetStockPrice(stock, datetime.datetime(2020, 12, 6))
+      #   log.info("id={id}, name={name}, price={cur_price}, twoMonth_price={price_2}".format(id=stock, name=stockData.name, cur_price=curPrice, price_2=twoMonthPrice))
