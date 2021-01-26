@@ -49,11 +49,18 @@ class TraderParam:
 
 gParam = TraderParam()
 
+class AnalysticTool:
+  def __init__(self):
+    self.stocks = []
+    self.win = 0
+    self.loss = 0
+
 # 初始化函数，设定要操作的股票、基准等等
 def initialize(context):
   # log.info(g.securities)
   gParam = TraderParam()
   
+  g.analysTool = AnalysticTool()
   # 去除688开头科创板
   g.securities = [x for x in get_all_securities(['stock'])._stat_axis.values.tolist() if not x.startswith('688')]
   set_universe(g.securities)
@@ -64,6 +71,21 @@ def initialize(context):
 
 def handle_data(context, data):
   pass
+
+def log_stock_buy(stockData):
+  log.info("id={id}, name={name}, price={cur_price}".format(id=stockData.id, name=stockData.name ,cur_price=stockData.kLineDays[0].close))
+
+def log_stock_sell(buyStockData, sellStockData):
+  loss = buyStockData.kLineDays[0].close >= sellStockData.kLineDays[0].close
+  if (loss):
+    g.analysTool.loss += 1
+  else:
+    g.analysTool.win += 1
+  log.info("win={winCount}, loss={lossCount}, trading={tradeCount}".format(winCount=g.analysTool.win, lossCount=g.analysTool.loss, tradeCount=len(g.analysTool.stocks)))
+  winMsg = "*--" if not loss else ""
+  log.info(winMsg + "id={id}, name={name}, buyDate={buyDate}, sellDate={sellDate}, diffDate={diffDate}, buyPrice={buyPrice}, sellPrice={sellPrice}".format(\
+    id=buyStockData.id, name=buyStockData.name, buyDate=buyStockData.kLineDays[0].endTime, sellDate=sellStockData.kLineDays[0].endTime, \
+    diffDate=(sellStockData.kLineDays[0].endTime - buyStockData.kLineDays[0].endTime).days, buyPrice=buyStockData.kLineDays[0].close, sellPrice=sellStockData.kLineDays[0].close))
 
 def before_trading_start(context):
   # 初始化 rsi 和 kdj 数据
@@ -94,7 +116,7 @@ def before_trading_start(context):
 
     # 回测环境专用
     dicStockData = dataFactory.genAllStockData([stock], context.current_dt, None)
-    if stock in dicStockData:
+    if stock in dicStockData and stock not in [x.id for x in g.analysTool.stocks]:
       stockData = dicStockData[stock]
       # 至少上市56周
       if stockData == None or stockData.publishDays < gParam.MIN_PUBLISH_DAYS:
@@ -106,8 +128,9 @@ def before_trading_start(context):
       # 月线上涨，周线背离（股价下降，周kdj上涨）买入
       # 周线顶背离（股价上升，周kdj下降，或者周kdj大于80，周线下降）
       if stockData.preKDJMonths[0] <= 85 and stockData.serialPositiveKDJMonthDay(2):
-        if stockData.kLineWeeks[0].open * 0.95 > stockData.kLineWeeks[0].close and stockData.serialPositiveKDJWeekDay(2):
-          
+        if stockData.kLineWeeks[0].open * 0.95 > stockData.kLineWeeks[0].close and stockData.serialPositiveKDJWeekDay(1):
+          log_stock_buy(stockData)
+          g.analysTool.stocks.append(stockData)
       # 周线小于20
       #if stockData.preKDJWeeks[0] <= 20.0 and \
       #  stockData.preKDJWeeks[0] > stockData.preKDJWeeks[1] and \
@@ -120,3 +143,14 @@ def before_trading_start(context):
       #   curPrice = stockData.kLineDays[0].close
       #   twoMonthPrice = dataFactory.GetStockPrice(stock, datetime.datetime(2020, 12, 6))
       #   log.info("id={id}, name={name}, price={cur_price}, twoMonth_price={price_2}".format(id=stock, name=stockData.name, cur_price=curPrice, price_2=twoMonthPrice))
+  removeDatas = []
+  for buyStockData in g.analysTool.stocks:
+    dicStockData = dataFactory.genAllStockData([buyStockData.id], context.current_dt, None)
+    if buyStockData.id in dicStockData:
+      stockData = dicStockData[buyStockData.id]
+      if (stockData.kLineWeeks[0].close > stockData.kLineWeeks[0].open and stockData.serialNegetiveKDJWeekDay(1)) or \
+        stockData.serialNegetiveKDJWeekDay(2):
+        log_stock_sell(buyStockData, stockData)
+        removeDatas.append(buyStockData)
+  for rmData in removeDatas:
+    g.analysTool.stocks.remove(rmData)
