@@ -42,6 +42,11 @@ def GetStockStart(stock_id):
   securityInfo = get_security_info(stock_id)
   return securityInfo.start_date #datetime.date
 
+# 获取上市到指定时间的天数，包括未开盘天（周末，停盘等）
+def GetStockStartDays(stock_id, tg_date):
+  start_dt = GetStockStart(stock_id)
+  return (tg_date - start_dt).days
+
 class TimeRecord:
   def __init__(self):
     self.startTime = 0

@@ -170,7 +170,7 @@ class TradeManager:   # 交易管理
                   # if monthDiff1 > 0 and monthDiff2 < 0 and monthDiff3 < 0 and monthMacdDiff > 0:
                   #   buyReason = 1
                   #   buyMsg = "monthDiff1 > 0 and monthDiff2 < 0 and monthDiff3 < 0 and monthMacdDiff > 0 and weekDiff1 > 0 and weekMacdDiff > 0"
-                  if stockData.serialPositiveMACDWeekDiffDay(7) and stockData.curKDJMonth > stockData.kdjMonthAvg + 2:
+                  if stockData.serialPositiveMACDWeekDiff(7) and stockData.curKDJMonth > stockData.kdjMonthAvg + 2:
                     buyReason = 2
                     buyMsg = "stockData.curMacdDiffMonth > 1.00 and stockData.curKDJMonth > stockData.kdjMonthAvg + 2"
                   if buyReason > 0:
@@ -305,7 +305,7 @@ class TradeRoom:    #交易席位
       sellReason = 0
       sellMsg = ""
       # 月线反转，判定为卖出
-      if stockData.curKDJMonth < stockData.kdjMonthAvg - 4.50 or stockData.serialNegetiveMACDWeekDiffDay(7):
+      if stockData.curKDJMonth < stockData.kdjMonthAvg - 4.50 or stockData.serialNegetiveMACDWeekDiff(7):
         sellReason = 1
         sellMsg = "stockData.curKDJMonth < stockData.kdjMonthAvg - 4.50"
       if sellReason > 0:

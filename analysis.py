@@ -95,6 +95,19 @@ def before_trading_start(context):
   validCount = 0
   log.info("total stock: {count}".format(count=len(g.securities)))
   for stock in g.securities:
+    # 去掉st
+    stockName = GetStockName(stock)
+    if stockName.startswith('ST') or stockName.startswith('*ST'):
+      continue
+    # 去除科创板（需要50万资产）
+    if stockName.startswith('688'):
+      continue
+
+    # 去除上市时间过少的股票 （这里包含未开盘日）
+    fullStartDays = GetStockStartDays(stock, context.current_dt.date())
+    if fullStartDays < gParam.MIN_PUBLISH_DAYS:
+      continue
+
     # 先获取财务数据
     q = query(valuation).filter(
       valuation.code == stock
@@ -107,11 +120,6 @@ def before_trading_start(context):
       continue
     pe_ratio = df['pe_ratio'][0]
     if pe_ratio > gParam.PE_RATIO or pe_ratio <= 0:
-      continue
-
-    # 去掉st
-    stockName = GetStockName(stock)
-    if stockName.startswith('ST') or stockName.startswith('*ST'):
       continue
 
     # 回测环境专用
@@ -127,14 +135,14 @@ def before_trading_start(context):
 
       # 月线上涨，周线背离（股价下降，周kdj上涨）买入
       # 周线顶背离（股价上升，周kdj下降，或者周kdj大于80，周线下降）
-      if stockData.preKDJMonths[0] <= 85 and stockData.serialPositiveKDJMonthDay(2):
-        if stockData.kLineWeeks[0].open * 0.95 > stockData.kLineWeeks[0].close and stockData.serialPositiveKDJWeekDay(1):
+      if stockData.preKDJMonths[0] <= 85 and stockData.serialPositiveKDJMonth(2):
+        if stockData.kLineWeeks[0].open * 0.95 > stockData.kLineWeeks[0].close and stockData.serialPositiveKDJWeek(1):
           log_stock_buy(stockData)
           g.analysTool.stocks.append(stockData)
       # 周线小于20
       #if stockData.preKDJWeeks[0] <= 20.0 and \
       #  stockData.preKDJWeeks[0] > stockData.preKDJWeeks[1] and \
-      #  stockData.serialPositiveMACDWeekDiffDay(2):
+      #  stockData.serialPositiveMACDWeekDiff(2):
       #  log.info("id={id}, name={name}, week_kdj={w_kdj}, pre_kdj={w_prekdj}".format(id=stock, name=stockData.name, w_kdj=stockData.preKDJWeeks[0], w_prekdj=stockData.preKDJWeeks[1]))
       # 月线平均上升
       # if stockData.preKDJMonths[0] <= 65 and \
@@ -148,8 +156,8 @@ def before_trading_start(context):
     dicStockData = dataFactory.genAllStockData([buyStockData.id], context.current_dt, None)
     if buyStockData.id in dicStockData:
       stockData = dicStockData[buyStockData.id]
-      if (stockData.kLineWeeks[0].close > stockData.kLineWeeks[0].open and stockData.serialNegetiveKDJWeekDay(1)) or \
-        stockData.serialNegetiveKDJWeekDay(2):
+      if (stockData.kLineWeeks[0].close > stockData.kLineWeeks[0].open and stockData.serialNegetiveKDJWeek(1)) or \
+        stockData.serialNegetiveKDJWeek(1):
         log_stock_sell(buyStockData, stockData)
         removeDatas.append(buyStockData)
   for rmData in removeDatas:
