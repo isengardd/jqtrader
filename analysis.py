@@ -136,7 +136,7 @@ def before_trading_start(context):
       # 月线上涨，周线背离（股价下降，周kdj上涨）买入
       # 周线顶背离（股价上升，周kdj下降，或者周kdj大于80，周线下降）
       if stockData.preKDJMonths[0] <= 85 and stockData.serialPositiveKDJMonth(2):
-        if stockData.kLineWeeks[0].open * 0.95 > stockData.kLineWeeks[0].close and stockData.serialPositiveKDJWeek(1):
+        if stockData.kLineWeeks[1].open * 0.93 > stockData.kLineWeeks[1].close and stockData.serialPositiveKDJWeek(2):
           log_stock_buy(stockData)
           g.analysTool.stocks.append(stockData)
       # 周线小于20
@@ -156,7 +156,7 @@ def before_trading_start(context):
     dicStockData = dataFactory.genAllStockData([buyStockData.id], context.current_dt, None)
     if buyStockData.id in dicStockData:
       stockData = dicStockData[buyStockData.id]
-      if (stockData.kLineWeeks[0].close > stockData.kLineWeeks[0].open and stockData.serialNegetiveKDJWeek(1)) or \
+      if (stockData.kLineWeeks[0].close * 0.97 > stockData.kLineWeeks[0].open and stockData.serialNegetiveKDJWeek(1)) or \
         stockData.serialNegetiveKDJWeek(1):
         log_stock_sell(buyStockData, stockData)
         removeDatas.append(buyStockData)
