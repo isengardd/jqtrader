@@ -19,15 +19,31 @@ class StockData:
     self.preMacdDiffWeeks = [float(0.00)] * gParam.MACD_DIFF_PRE_WEEK_COUNT
     self.curMacdDiffWeek = float(0.00)
     self.curKDJWeek = float(0.00)
-    self.kdjWeekAvgList = [float(0.00)] * gParam.KDJ_WEEK_AVG_COUNT # 实际操作中多缓存一天,减少重复计算,但是平均值只取前x天
+    #self.kdjWeekAvgList = [float(0.00)] * gParam.KDJ_WEEK_AVG_COUNT # 实际操作中多缓存一天,减少重复计算,但是平均值只取前x天
     self.kdjWeekAvg = float(0.00)
     self.kLineMonths = [] # 月K线缓存
     self.preMacdDiffMonths = [float(0.00)] * gParam.MACD_PRE_MONTH_COUNT
     self.curMacdDiffMonth = float(0.00)
     self.preKDJMonths = [float(0.00)] * gParam.KDJ_PRE_MONTH_COUNT
     self.curKDJMonth = float(0.00)
-    self.kdjMonthAvgList = [float(0.00)] * gParam.KDJ_MONTH_AVG_COUNT # 实际操作中多缓存一天,减少重复计算,但是平均值只取前x天
+    #self.kdjMonthAvgList = [float(0.00)] * gParam.KDJ_MONTH_AVG_COUNT # 实际操作中多缓存一天,减少重复计算,但是平均值只取前x天
     self.kdjMonthAvg = float(0.00)
+
+  def getKdjMonthAvg(self, start, count):
+    if count <= 0 or len(self.preKDJMonths) == 0 or start >= len(self.preKDJMonths):
+      return 0
+    end = start + count
+    if end > len(self.preKDJMonths):
+      end = len(self.preKDJMonths)
+    return sum(self.preKDJMonths[start:end]) / count
+
+  def getKdjWeekAvg(self, start, count):
+    if count <= 0 or len(self.preKDJWeeks) == 0 or start >= len(self.preKDJWeeks):
+      return 0
+    end = start + count
+    if end > len(self.preKDJWeeks):
+      end = len(self.preKDJWeeks)
+    return sum(self.preKDJWeeks[start:end]) / count
 
   def preKDJMonthDiff(self, index):
     if index == 0:
@@ -249,37 +265,8 @@ class DataFactory:
       stockData = self.calcStockData(stock, rowIndexList, klineList, -1)
       stockData.name = security_info.display_name
       stockData.publishDays = publishDays
-      if self.gParam.PRODUCT:
-        stockData.kdjMonthAvg = self.getKDJMonthAvg(rowIndexList, klineList, self.gParam.KDJ_MONTH_AVG_COUNT)
-        stockData.kdjWeekAvg = self.getKDJWeekAvg(rowIndexList, klineList, self.gParam.KDJ_WEEK_AVG_COUNT)
-      else:
-        # 测试环境使用缓存的数据计算平均值
-        preGStockData = preStockDatas[stock] if preStockDatas and stock in preStockDatas else None
-        if preGStockData == None or preGStockData.kdjMonthAvg <= float(0.001):
-          # 这里取逆序
-          for preDayIndex in range(max(self.gParam.KDJ_MONTH_AVG_COUNT, self.gParam.KDJ_WEEK_AVG_COUNT)-1, -1, -1):
-            preDayStockData = self.initStockKlineBar(stock, rowIndexList, klineList, -2 - preDayIndex)
-            # 月
-            monthIdx = self.gParam.KDJ_MONTH_AVG_COUNT - preDayIndex - 1
-            if monthIdx >= 0 and monthIdx < len(stockData.kdjMonthAvgList):
-              preDayStockData.preKDJMonths[0] = calcKDJ.GetKDJ(preDayStockData.kLineMonths, self.gParam.KDJ_PARAM1, self.gParam.KDJ_PARAM2, self.gParam.KDJ_PARAM3)[1]
-              stockData.kdjMonthAvgList[monthIdx] = preDayStockData.preKDJMonths[0]
-            # 周
-            weekIdx = self.gParam.KDJ_WEEK_AVG_COUNT - preDayIndex - 1
-            if weekIdx >= 0 and weekIdx < len(stockData.kdjWeekAvgList):
-              preDayStockData.preKDJWeeks[0] = calcKDJ.GetKDJ(preDayStockData.kLineWeeks, self.gParam.KDJ_PARAM1, self.gParam.KDJ_PARAM2, self.gParam.KDJ_PARAM3)[1]
-              stockData.kdjWeekAvgList[weekIdx] = preDayStockData.preKDJWeeks[0]
-          stockData.kdjMonthAvg = sum(stockData.kdjMonthAvgList[:self.gParam.KDJ_MONTH_AVG_COUNT]) / self.gParam.KDJ_MONTH_AVG_COUNT
-          stockData.kdjMonthAvgList.append(stockData.preKDJMonths[0]) # 把昨日的也缓存起来，省一次计算
-          stockData.kdjWeekAvg = sum(stockData.kdjWeekAvgList[:self.gParam.KDJ_WEEK_AVG_COUNT]) / self.gParam.KDJ_WEEK_AVG_COUNT
-          stockData.kdjWeekAvgList.append(stockData.preKDJWeeks[0]) # 把昨日的也缓存起来，省一次计算
-        else:
-          stockData.kdjMonthAvgList = preGStockData.kdjMonthAvgList[1:]
-          stockData.kdjMonthAvgList.append(stockData.preKDJMonths[0])
-          stockData.kdjMonthAvg = sum(stockData.kdjMonthAvgList[:self.gParam.KDJ_MONTH_AVG_COUNT]) / self.gParam.KDJ_MONTH_AVG_COUNT
-          stockData.kdjWeekAvgList = preGStockData.kdjWeekAvgList[1:]
-          stockData.kdjWeekAvgList.append(stockData.preKDJWeeks[0])
-          stockData.kdjWeekAvg = sum(stockData.kdjWeekAvgList[:self.gParam.KDJ_WEEK_AVG_COUNT]) / self.gParam.KDJ_WEEK_AVG_COUNT
+      stockData.kdjMonthAvg = stockData.getKdjMonthAvg(0, self.gParam.KDJ_MONTH_AVG_COUNT)
+      stockData.kdjWeekAvg = stockData.getKdjWeekAvg(0, self.gParam.KDJ_WEEK_AVG_COUNT)
       preDayOpen = klineList['open'][len(rowIndexList) - 1] if len(rowIndexList) > 0 else 0
       preDayClose = klineList['close'][len(rowIndexList) - 1] if len(rowIndexList) > 0 else 0
       if self.openLog == True:

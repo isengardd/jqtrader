@@ -11,7 +11,7 @@ from datafactory import *
 class TraderParam:
   def __init__(self):
     # analysis特有参数
-    self.MARKET_CAP_FILT = float(150) # 市值过滤
+    self.MARKET_CAP_FILT = float(100) # 市值过滤
     self.PE_RATIO = float(35) # 市盈率过滤
     self.PB_RATIO = float(10) # 市净率过滤
     # self.TOTAL_OPERATING_REVENUE = float(200) # 营业总收入过滤 (200亿)
@@ -37,8 +37,8 @@ class TraderParam:
     self.KDJ_PRE_MONTH_COUNT = 5 # KDJ月线缓存数
     self.KDJ_PRE_WEEK_COUNT = 5 # KDJ周线缓存数
     self.KDJ_PRE_DAY_COUNT = 5 # KDJ日线缓存数
-    self.KDJ_MONTH_AVG_COUNT = 40 # KDJ每日月均线缓存数（前X天的月KDJ列表,用于计算平均值）
-    self.KDJ_WEEK_AVG_COUNT = 10 # KDJ每日周均线缓存数
+    self.KDJ_MONTH_AVG_COUNT = 5 # KDJ每日月均线缓存数（前X天的月KDJ列表,用于计算平均值）
+    self.KDJ_WEEK_AVG_COUNT = 5 # KDJ每日周均线缓存数
     self.MACD_PRE_MONTH_COUNT = 2 # MACD月线缓存数
     self.MACD_DIFF_PRE_WEEK_COUNT = 10 # MACD_DIFF周线缓存数
     self.MACD_DEA_PRE_WEEK_COUNT = 5 # MACD_DEA周线缓存
@@ -94,7 +94,9 @@ def before_trading_start(context):
 
   validCount = 0
   log.info("total stock: {count}".format(count=len(g.securities)))
+  tm = TimeRecord() 
   for stock in g.securities:
+    tm.start()
     # 去掉st
     stockName = GetStockName(stock)
     if stockName.startswith('ST') or stockName.startswith('*ST'):
@@ -107,10 +109,14 @@ def before_trading_start(context):
     fullStartDays = GetStockStartDays(stock, context.current_dt.date())
     if fullStartDays < gParam.MIN_PUBLISH_DAYS:
       continue
-
+    tm.end("01")
+    tm.start()
     # 先获取财务数据
     q = query(valuation).filter(
       valuation.code == stock
+      # valuation.market_cap > 100,
+      # valuation.pe_ratio < 35,
+      # valuation.pe_ratio > 0,
     )
     df = get_fundamentals(q)
     if len(df['market_cap']) == 0:
@@ -121,7 +127,8 @@ def before_trading_start(context):
     pe_ratio = df['pe_ratio'][0]
     if pe_ratio > gParam.PE_RATIO or pe_ratio <= 0:
       continue
-
+    tm.end("02")
+    tm.start()
     # 回测环境专用
     dicStockData = dataFactory.genAllStockData([stock], context.current_dt, None)
     if stock in dicStockData and stock not in [x.id for x in g.analysTool.stocks]:
@@ -136,7 +143,8 @@ def before_trading_start(context):
       # 月线上涨，周线背离（股价下降，周kdj上涨）买入
       # 周线顶背离（股价上升，周kdj下降，或者周kdj大于80，周线下降）
       if stockData.preKDJMonths[0] <= 85 and stockData.serialPositiveKDJMonth(2):
-        if stockData.kLineWeeks[1].open * 0.93 > stockData.kLineWeeks[1].close and stockData.serialPositiveKDJWeek(2):
+        if stockData.kLineWeeks[1].open * 0.95 > stockData.kLineWeeks[1].close and \
+          stockData.kLineWeeks[0].open < stockData.kLineWeeks[0].close and stockData.serialPositiveKDJWeek(2):
           log_stock_buy(stockData)
           g.analysTool.stocks.append(stockData)
       # 周线小于20
@@ -151,13 +159,14 @@ def before_trading_start(context):
       #   curPrice = stockData.kLineDays[0].close
       #   twoMonthPrice = dataFactory.GetStockPrice(stock, datetime.datetime(2020, 12, 6))
       #   log.info("id={id}, name={name}, price={cur_price}, twoMonth_price={price_2}".format(id=stock, name=stockData.name, cur_price=curPrice, price_2=twoMonthPrice))
+    tm.end("03")
   removeDatas = []
   for buyStockData in g.analysTool.stocks:
     dicStockData = dataFactory.genAllStockData([buyStockData.id], context.current_dt, None)
     if buyStockData.id in dicStockData:
       stockData = dicStockData[buyStockData.id]
-      if (stockData.kLineWeeks[0].close * 0.97 > stockData.kLineWeeks[0].open and stockData.serialNegetiveKDJWeek(1)) or \
-        stockData.serialNegetiveKDJWeek(1):
+      if (stockData.kLineWeeks[0].close * 0.98 > stockData.kLineWeeks[0].open and stockData.serialNegetiveKDJWeek(1)) or \
+        stockData.serialNegetiveKDJWeek(2):
         log_stock_sell(buyStockData, stockData)
         removeDatas.append(buyStockData)
   for rmData in removeDatas:
