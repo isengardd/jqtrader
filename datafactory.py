@@ -351,8 +351,8 @@ class DataFactory:
     if SKILL_AVG in self.gParam.needSkills:
       calcAvg = CalcAvg()
       for n in range(self.gParam.AVG_PRE_DAY_COUNT):
-        stockData.preAvgS[n] = calcAvg.GetAvg(stockData.kLineMonths[n:], self.gParam.AVG_S_COUNT)
-        stockData.preAvgM[n] = calcAvg.GetAvg(stockData.kLineMonths[n:], self.gParam.AVG_M_COUNT)
+        stockData.preAvgS[n] = calcAvg.GetAvg(stockData.kLineDays[n:], self.gParam.AVG_S_COUNT)
+        stockData.preAvgM[n] = calcAvg.GetAvg(stockData.kLineWeeks[n:], self.gParam.AVG_M_COUNT)
         stockData.preAvgL[n] = calcAvg.GetAvg(stockData.kLineMonths[n:], self.gParam.AVG_L_COUNT)
     return stockData
 

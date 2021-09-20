@@ -138,7 +138,7 @@ class CalcAvg(CalcCommon):
     
     totalDay = 0
     sumPrice = 0.0000
-    for i in range(len(kLine)-1, -1, -1):
+    for i in range(len(kLine)):
       if i < N:
         sumPrice += kLine[i].close
         totalDay += 1

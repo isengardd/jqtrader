@@ -117,7 +117,7 @@ def before_trading_start(context):
     fullStartDays = GetStockStartDays(stock, context.current_dt.date())
     if fullStartDays < gParam.MIN_PUBLISH_DAYS:
       continue
-    tm.end("01")
+    #tm.end("01")
     tm.start()
     # 先获取财务数据
     q = query(valuation).filter(
@@ -135,12 +135,12 @@ def before_trading_start(context):
     pe_ratio = df['pe_ratio'][0]
     if pe_ratio > gParam.PE_RATIO or pe_ratio <= 0:
       continue
-    tm.end("02")
+    #tm.end("02")
     tm.start()
     # 回测环境专用
     dicStockData = dataFactory.genAllStockData([stock], context.current_dt)
     if stock in dicStockData and stock not in [x.id for x in g.analysTool.stocks]:
-      stockData = StockData(dicStockData[stock])
+      stockData = dicStockData[stock]
       # 至少上市x天
       if stockData == None or stockData.publishDays < gParam.MIN_PUBLISH_DAYS:
         continue
@@ -148,21 +148,21 @@ def before_trading_start(context):
       #if pe_ratio < 5:
       #  log.info("id={id}, name={name}, pe={pe_ratio}".format(id=stock, name=stockData.name, pe_ratio=pe_ratio))
       # 短期均线上方
-      if KLineBar(stockData.kLineDays[0]).close > stockData.preAvgS[0]:
+      if stockData.kLineDays[0].close > stockData.preAvgS[0]:
         suffixMsg = ""
-        if KLineBar(stockData.kLineDays[0]).close > stockData.preAvgM[0]:
+        if stockData.kLineDays[0].close > stockData.preAvgM[0]:
           suffixMsg += "中期均线 {avgM} ".format(avgM=stockData.preAvgM[0])
-        if KLineBar(stockData.kLineDays[0]).close > stockData.preAvgL[0]:
-          suffixMsg += "长期均线 {avgL} ".format(avgM=stockData.preAvgL[0])
-        log_stock_buy(stockData, "收盘价 {close} 大于短期均线 {avgS} {suffixMsg}".format(close=KLineBar(stockData.kLineDays[0]).close, avgS=stockData.preAvgS[0], suffixMsg=suffixMsg))
+        if stockData.kLineDays[0].close > stockData.preAvgL[0]:
+          suffixMsg += "长期均线 {avgL} ".format(avgL=stockData.preAvgL[0])
+        log_stock_buy(stockData, "收盘价 {close} 大于短期均线 {avgS} {suffixMsg}".format(close=stockData.kLineDays[0].close, avgS=stockData.preAvgS[0], suffixMsg=suffixMsg))
         g.analysTool.stocks.append(stockData)
-      elif KLineBar(stockData.kLineDays[0]).close > stockData.preAvgM[0]:
-        suffixMsg = "长期均线 {avgL} ".format(avgM=stockData.preAvgL[0])
-        log_stock_buy(stockData, "收盘价 {close} 大于中期均线 {avgM} {suffixMsg}".format(close=KLineBar(stockData.kLineDays[0]).close, avgM=stockData.preAvgM[0], suffixMsg=suffixMsg))
+      elif stockData.kLineDays[0].close > stockData.preAvgM[0]:
+        suffixMsg = "长期均线 {avgL} ".format(avgL=stockData.preAvgL[0])
+        log_stock_buy(stockData, "收盘价 {close} 大于中期均线 {avgM} {suffixMsg}".format(close=stockData.kLineDays[0].close, avgM=stockData.preAvgM[0], suffixMsg=suffixMsg))
         g.analysTool.stocks.append(stockData)
-      elif KLineBar(stockData.kLineDays[0]).close > stockData.preAvgL[0]:
+      elif stockData.kLineDays[0].close > stockData.preAvgL[0]:
         suffixMsg = ""
-        log_stock_buy(stockData, "收盘价 {close} 大于长期均线 {avgL} {suffixMsg}".format(close=KLineBar(stockData.kLineDays[0]).close, avgL=stockData.preAvgL[0], suffixMsg=suffixMsg))
+        log_stock_buy(stockData, "收盘价 {close} 大于长期均线 {avgL} {suffixMsg}".format(close=stockData.kLineDays[0].close, avgL=stockData.preAvgL[0], suffixMsg=suffixMsg))
         g.analysTool.stocks.append(stockData)
       # 中期均线上方
       # 长期均线上方
@@ -186,7 +186,7 @@ def before_trading_start(context):
       #   curPrice = stockData.kLineDays[0].close
       #   twoMonthPrice = dataFactory.GetStockPrice(stock, datetime.datetime(2020, 12, 6))
       #   log.info("id={id}, name={name}, price={cur_price}, twoMonth_price={price_2}".format(id=stock, name=stockData.name, cur_price=curPrice, price_2=twoMonthPrice))
-    tm.end("03")
+    #tm.end("03")
   removeDatas = []
   for buyStockData in g.analysTool.stocks:
     dicStockData = dataFactory.genAllStockData([buyStockData.id], context.current_dt)
