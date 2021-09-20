@@ -12,6 +12,7 @@ ERR_DATA = -666666        # 错误数据
 SKILL_MACD = 0
 SKILL_RSI = 1
 SKILL_KDJ = 2
+SKILL_AVG = 3
 
 # 分割kline的方法
 SPLIT_KLINE_NORMAL = 1 #按自然日期月，周
@@ -125,6 +126,25 @@ class CalcCommon:
       if val.low < min:
         min = val.low
     return min
+
+class CalcAvg(CalcCommon):
+  def __init__(self):
+    CalcCommon.__init__(self)
+    self.skillType = SKILL_AVG
+
+  def GetAvg(self, kLine, N):
+    if N == 0:
+      return ERR_DATA
+    
+    totalDay = 0
+    sumPrice = 0.0000
+    for i in range(len(kLine)-1, -1, -1):
+      if i < N:
+        sumPrice += kLine[i].close
+        totalDay += 1
+      else:
+        break
+    return sumPrice / totalDay
 
 class CalcKDJ(CalcCommon):
   def __init__(self):

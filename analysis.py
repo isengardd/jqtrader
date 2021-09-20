@@ -17,12 +17,15 @@ class TraderParam:
     # self.TOTAL_OPERATING_REVENUE = float(200) # 营业总收入过滤 (200亿)
     # self.INCOME = 2e8 # 利润
 
+    # 所需技术数据
+    self.needSkills = [SKILL_AVG]
+
     # 交易参数
     self.PRODUCT = False # 是否是生产环境
     self.MULTI_STATUS_MACHINE = False # 是否使用多层状态机
     self.KLINE_FREQUENCY = "1d"
     self.KLINE_LENGTH = 150       # 月K线数量， 最多取 60个月数据
-    self.MIN_PUBLISH_DAYS = 28 * 5 # 最少上市天数
+    self.MIN_PUBLISH_DAYS = 28 * 12 # 最少上市天数
     self.ROOM_MAX = 10 # 要交易的股票数
     self.BUY_INTERVAL_DAY = 1
     self.SELL_INTERVAL_DAY = 1
@@ -42,6 +45,11 @@ class TraderParam:
     self.MACD_PRE_MONTH_COUNT = 2 # MACD月线缓存数
     self.MACD_DIFF_PRE_WEEK_COUNT = 10 # MACD_DIFF周线缓存数
     self.MACD_DEA_PRE_WEEK_COUNT = 5 # MACD_DEA周线缓存
+    self.AVG_S_COUNT = 13 # 平均线短线天数
+    self.AVG_M_COUNT = 34 # 平均线中线天数
+    self.AVG_L_COUNT = 55 # 平均线长线天数
+    self.AVG_PRE_DAY_COUNT = 3
+
     # k线参数
     self.KLINE_SPLIT_TYPE = SPLIT_KLINE_NORMAL
     self.KLINE_BAR_MONTH_DAY = 20 # k线月线的天数
@@ -72,8 +80,8 @@ def initialize(context):
 def handle_data(context, data):
   pass
 
-def log_stock_buy(stockData):
-  log.info("id={id}, name={name}, price={cur_price}".format(id=stockData.id, name=stockData.name ,cur_price=stockData.kLineDays[0].close))
+def log_stock_buy(stockData, reason):
+  log.info("id={id}, name={name}, price={cur_price}, reason={reason}".format(id=stockData.id, name=stockData.name ,cur_price=stockData.kLineDays[0].close, reason=reason))
 
 def log_stock_sell(buyStockData, sellStockData):
   loss = buyStockData.kLineDays[0].close >= sellStockData.kLineDays[0].close
@@ -113,10 +121,10 @@ def before_trading_start(context):
     tm.start()
     # 先获取财务数据
     q = query(valuation).filter(
-      valuation.code == stock
-      # valuation.market_cap > 100,
-      # valuation.pe_ratio < 35,
-      # valuation.pe_ratio > 0,
+      valuation.code == stock,
+      valuation.market_cap > 100,
+      valuation.pe_ratio < 35,
+      valuation.pe_ratio > 0,
     )
     df = get_fundamentals(q)
     if len(df['market_cap']) == 0:
@@ -130,23 +138,42 @@ def before_trading_start(context):
     tm.end("02")
     tm.start()
     # 回测环境专用
-    dicStockData = dataFactory.genAllStockData([stock], context.current_dt, None)
+    dicStockData = dataFactory.genAllStockData([stock], context.current_dt)
     if stock in dicStockData and stock not in [x.id for x in g.analysTool.stocks]:
-      stockData = dicStockData[stock]
-      # 至少上市56周
+      stockData = StockData(dicStockData[stock])
+      # 至少上市x天
       if stockData == None or stockData.publishDays < gParam.MIN_PUBLISH_DAYS:
         continue
 
       #if pe_ratio < 5:
       #  log.info("id={id}, name={name}, pe={pe_ratio}".format(id=stock, name=stockData.name, pe_ratio=pe_ratio))
-
+      # 短期均线上方
+      if KLineBar(stockData.kLineDays[0]).close > stockData.preAvgS[0]:
+        suffixMsg = ""
+        if KLineBar(stockData.kLineDays[0]).close > stockData.preAvgM[0]:
+          suffixMsg += "中期均线 {avgM} ".format(avgM=stockData.preAvgM[0])
+        if KLineBar(stockData.kLineDays[0]).close > stockData.preAvgL[0]:
+          suffixMsg += "长期均线 {avgL} ".format(avgM=stockData.preAvgL[0])
+        log_stock_buy(stockData, "收盘价 {close} 大于短期均线 {avgS} {suffixMsg}".format(close=KLineBar(stockData.kLineDays[0]).close, avgS=stockData.preAvgS[0], suffixMsg=suffixMsg))
+        g.analysTool.stocks.append(stockData)
+      elif KLineBar(stockData.kLineDays[0]).close > stockData.preAvgM[0]:
+        suffixMsg = "长期均线 {avgL} ".format(avgM=stockData.preAvgL[0])
+        log_stock_buy(stockData, "收盘价 {close} 大于中期均线 {avgM} {suffixMsg}".format(close=KLineBar(stockData.kLineDays[0]).close, avgM=stockData.preAvgM[0], suffixMsg=suffixMsg))
+        g.analysTool.stocks.append(stockData)
+      elif KLineBar(stockData.kLineDays[0]).close > stockData.preAvgL[0]:
+        suffixMsg = ""
+        log_stock_buy(stockData, "收盘价 {close} 大于长期均线 {avgL} {suffixMsg}".format(close=KLineBar(stockData.kLineDays[0]).close, avgL=stockData.preAvgL[0], suffixMsg=suffixMsg))
+        g.analysTool.stocks.append(stockData)
+      # 中期均线上方
+      # 长期均线上方
       # 月线上涨，周线背离（股价下降，周kdj上涨）买入
       # 周线顶背离（股价上升，周kdj下降，或者周kdj大于80，周线下降）
-      if stockData.preKDJMonths[0] <= 85 and stockData.serialPositiveKDJMonth(2):
-        if stockData.kLineWeeks[1].open * 0.95 > stockData.kLineWeeks[1].close and \
-          stockData.kLineWeeks[0].open < stockData.kLineWeeks[0].close and stockData.serialPositiveKDJWeek(2):
-          log_stock_buy(stockData)
-          g.analysTool.stocks.append(stockData)
+      # if stockData.preKDJMonths[0] <= 85 and stockData.serialPositiveKDJMonth(2):
+      #   if stockData.kLineWeeks[1].open * 0.95 > stockData.kLineWeeks[1].close and \
+      #     stockData.kLineWeeks[0].open < stockData.kLineWeeks[0].close and stockData.serialPositiveKDJWeek(2):
+      #     log_stock_buy(stockData)
+      #     g.analysTool.stocks.append(stockData)
+
       # 周线小于20
       #if stockData.preKDJWeeks[0] <= 20.0 and \
       #  stockData.preKDJWeeks[0] > stockData.preKDJWeeks[1] and \
@@ -162,7 +189,7 @@ def before_trading_start(context):
     tm.end("03")
   removeDatas = []
   for buyStockData in g.analysTool.stocks:
-    dicStockData = dataFactory.genAllStockData([buyStockData.id], context.current_dt, None)
+    dicStockData = dataFactory.genAllStockData([buyStockData.id], context.current_dt)
     if buyStockData.id in dicStockData:
       stockData = dicStockData[buyStockData.id]
       if (stockData.kLineWeeks[0].close * 0.98 > stockData.kLineWeeks[0].open and stockData.serialNegetiveKDJWeek(1)) or \
