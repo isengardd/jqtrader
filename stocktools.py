@@ -33,7 +33,7 @@ def GetDayTimeStamp(dt, deltaDay):
   return int(tt)
 
 def GetDayTimeStr(dt, deltaDay):
-  return (dt - datetime.timedelta(days=deltaDay)).strftime("%Y-%m-%d")
+  return (dt + datetime.timedelta(days=deltaDay)).strftime("%Y-%m-%d")
 
 def GetStockName(stock_id):
   securityInfo = get_security_info(stock_id)

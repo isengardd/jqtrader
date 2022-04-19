@@ -575,7 +575,7 @@ def before_trading_start(context):
     log.info("daytime: {0}".format(context.current_dt.strftime("%Y-%m-%d")))
     g.tradeManager.runCount = 0 # 重置一下每日执行次数
     #preGStockDatas = g.stockDatas if hasattr(g, "stockDatas") else None # 缓存一下前一天的数据，仅在测试环境使用
-    g.stockDatas = dataFactory.genAllStockData(g.securities, context)
+    g.stockDatas = dataFactory.genAllStockData(g.securities, context.current_dt)
 
 def after_trading_end(context):
   # 更新持股数

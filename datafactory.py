@@ -232,7 +232,7 @@ class DataFactory:
       # 这样前后两天执行时的rsi和kdj不一致。可能出现前一天不满足买入卖出条件，但是
       # 第二天一开盘就又满足了条件
       # 这里注意end_date需要传入前一天日期
-      pre_date = (cur_datetime - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+      pre_date = GetDayTimeStr(cur_datetime, -1)
       klineList = None
       rowIndexList = None # 行索引是时间戳
       security_info = get_security_info(stock)
