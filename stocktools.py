@@ -158,8 +158,9 @@ class CalcKDJ(CalcCommon):
     rsvDay = int(self.GetEMA_K(M2) + self.GetEMA_K(M1)) + int(N)
     if rsvDay > len(kLine):
         rsvDay = len(kLine)
+    defaultKDJ = 50.0000
     if rsvDay <= 1:
-      return 100.0000, 100.0000
+      return defaultKDJ, defaultKDJ
     rsvList = [float(0) for i in range(rsvDay)]
     for i in range(rsvDay):
       rsvList[i] = self.GetRSV(kLine[i : min(int(N) + i, len(kLine))], N)
@@ -170,16 +171,16 @@ class CalcKDJ(CalcCommon):
       return (ERR_DATA, ERR_DATA)
     kList = [float(0) for i in range(kDay)]
     if len(rsvList) < len(kList):
-      kList[len(kList) - 1] = 100.0000
+      kList[len(kList) - 1] = defaultKDJ
     else:
       kList[len(kList)-1] = self.GetEMA(rsvList[len(kList)-1 : min(len(rsvList), len(kList)+int(self.GetEMA_K(M1))-1)], M1)
       if kLine[len(kList)-1] is None:
-        kLine[len(kList)-1] = 100.0000
+        kLine[len(kList)-1] = defaultKDJ
     for i in range(len(kList)-2, -1, -1):
       if i < len(rsvList) - 1:
         kList[i] = self.GetAlpha(M1)*rsvList[i] + kList[i+1]*(1-self.GetAlpha(M1))
       else:
-        kList[i] = 100.0000
+        kList[i] = defaultKDJ
     # 算出d值
     dVal = self.GetEMA(kList, M2)
     #if len(kLine) == 2:
@@ -204,11 +205,11 @@ class CalcKDJ(CalcCommon):
 
     # print "max = {0}, min = {1}".format(max, min)
     rsv = (kLine[0].close - min) / (max - min) * float(100.0000)
-    if rsv < float(1.0000):
-      rsv = float(1.0000)
+    if rsv < float(0.0001):
+      rsv = float(0.0001)
 
-    if rsv > float(100.0000):
-      rsv = float(100.0000)
+    # if rsv > float(100.0000):
+    #   rsv = float(100.0000)
 
     return rsv
   def CalcEMAFactorList(self, N):

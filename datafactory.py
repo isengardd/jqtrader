@@ -22,23 +22,32 @@ class StockData:
     # 日k线缓存
     self.kLineDays = []
     self.preKDJDays = [float(0.00)] * gParam.KDJ_PRE_DAY_COUNT
+    self.preKDJDays_K = [float(0.00)] * gParam.KDJ_PRE_DAY_COUNT
     self.curKDJDay = float(0.00)
+    self.curKDJDay_K = float(0.00)
     # 周k线缓存
-    self.kLineWeeks = [] 
+    self.kLineWeeks = []
     self.preKDJWeeks = [float(0.00)] * gParam.KDJ_PRE_WEEK_COUNT
+    self.preKDJWeeks_K = [float(0.00)] * gParam.KDJ_PRE_WEEK_COUNT
     self.preMacdDiffWeeks = [float(0.00)] * gParam.MACD_DIFF_PRE_WEEK_COUNT
     self.curMacdDiffWeek = float(0.00)
     self.curKDJWeek = float(0.00)
+    self.curKDJWeek_K = float(0.00)
     #self.kdjWeekAvgList = [float(0.00)] * gParam.KDJ_WEEK_AVG_COUNT # 实际操作中多缓存一天,减少重复计算,但是平均值只取前x天
     self.kdjWeekAvg = float(0.00)
     # 月K线缓存
-    self.kLineMonths = [] 
+    self.kLineMonths = []
     self.preMacdDiffMonths = [float(0.00)] * gParam.MACD_PRE_MONTH_COUNT
     self.curMacdDiffMonth = float(0.00)
     self.preKDJMonths = [float(0.00)] * gParam.KDJ_PRE_MONTH_COUNT
+    self.preKDJMonths_K = [float(0.00)] * gParam.KDJ_PRE_MONTH_COUNT
     self.curKDJMonth = float(0.00)
+    self.curKDJMonth_K = float(0.00)
     #self.kdjMonthAvgList = [float(0.00)] * gParam.KDJ_MONTH_AVG_COUNT # 实际操作中多缓存一天,减少重复计算,但是平均值只取前x天
     self.kdjMonthAvg = float(0.00)
+
+  def getPreTradeDay(self):
+    return self.kLineDays[0].endTime
 
   def getKdjMonthAvg(self, start, count):
     if count <= 0 or len(self.preKDJMonths) == 0 or start >= len(self.preKDJMonths):
@@ -264,6 +273,7 @@ class DataFactory:
       #log.info(len(rowIndexList), rowIndexList[:3],rowIndexList[len(rowIndexList)-3:])
       #print klineList._stat_axis.values.tolist()  # 取行名称
       # columns.values.tolist()   # 取列名称
+      #log.info(rowIndexList[len(rowIndexList) - 1])
       publishDays = self.getStockPublishDay(rowIndexList, klineList)
       if publishDays < self.gParam.MIN_PUBLISH_DAYS:
         stockData = StockData(self.gParam)
@@ -325,16 +335,19 @@ class DataFactory:
       calcKDJ = CalcKDJ()
       # Month
       for n in range(self.gParam.KDJ_PRE_MONTH_COUNT):
-        stockData.preKDJMonths[n] = calcKDJ.GetKDJ(stockData.kLineMonths[n:], self.gParam.KDJ_PARAM1, self.gParam.KDJ_PARAM2, self.gParam.KDJ_PARAM3)[1]
+        (stockData.preKDJMonths_K[n], stockData.preKDJMonths[n]) = calcKDJ.GetKDJ(stockData.kLineMonths[n:], self.gParam.KDJ_PARAM1, self.gParam.KDJ_PARAM2, self.gParam.KDJ_PARAM3)
       stockData.curKDJMonth = stockData.preKDJMonths[0]
+      stockData.curKDJMonth_K = stockData.preKDJMonths_K[0]
       # week
       for n in range(self.gParam.KDJ_PRE_WEEK_COUNT):
-        stockData.preKDJWeeks[n] = calcKDJ.GetKDJ(stockData.kLineWeeks[n:], self.gParam.KDJ_PARAM1, self.gParam.KDJ_PARAM2, self.gParam.KDJ_PARAM3)[1]
+        (stockData.preKDJWeeks_K[n], stockData.preKDJWeeks[n]) = calcKDJ.GetKDJ(stockData.kLineWeeks[n:], self.gParam.KDJ_PARAM1, self.gParam.KDJ_PARAM2, self.gParam.KDJ_PARAM3)
       stockData.curKDJWeek = stockData.preKDJWeeks[0]
+      stockData.curKDJWeek_K = stockData.preKDJWeeks_K[0]
       # day
       for n in range(self.gParam.KDJ_PRE_DAY_COUNT):
-        stockData.preKDJDays[n] = calcKDJ.GetKDJ(stockData.kLineDays[n:], self.gParam.KDJ_PARAM1, self.gParam.KDJ_PARAM2, self.gParam.KDJ_PARAM3)[1]
+        (stockData.preKDJDays_K[n], stockData.preKDJDays[n]) = calcKDJ.GetKDJ(stockData.kLineDays[n:], self.gParam.KDJ_PARAM1, self.gParam.KDJ_PARAM2, self.gParam.KDJ_PARAM3)
       stockData.curKDJDay = stockData.preKDJDays[0]
+      stockData.curKDJDay_K = stockData.preKDJDays_K[0]
     # MACD
     if SKILL_MACD in self.gParam.needSkills:
       calcMACD = CalcMACD()
