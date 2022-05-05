@@ -24,8 +24,8 @@ class TraderParam:
     self.ROOM_MAX = 1 # 要交易的股票数
     self.BUY_INTERVAL_DAY = 1
     self.SELL_INTERVAL_DAY = 1
-    self.SH_DEAD_KDJ_LINE = 75.00  # 上证指数kdj超过这个数值，停止交易，卖出所有持仓
-    self.SH_STOP_BUY_KDJ_LINE = 73.00 # 上证指数kdj超过这个数值，停止买入
+    self.SH_DEAD_KDJ_LINE = 90.00  # 上证指数kdj超过这个数值，停止交易，卖出所有持仓
+    self.SH_STOP_BUY_KDJ_LINE = 87.00 # 上证指数kdj超过这个数值，停止买入
     self.ONE_STOCK_BUY_KDJ_LINE = 85.00 # 个股的kdj超过这个数值，停止买入
 
     self.RSI_PARAM = 5
@@ -156,6 +156,10 @@ class TradeManager:   # 交易管理
                     stockData.kLineDays[0].low = cur_price
                   stockData.kLineDays[0].close = cur_price
                   (stockData.curKDJDay_K, stockData.curKDJDay) = calcKDJ.GetKDJ(stockData.kLineDays, gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)
+                #if self.runCount == 1 or (context.current_dt.hour == 14 and context.current_dt.minute >= 45):
+                #  log.info("price={price}, kdjDay_K={kdjDay_K}, kdjDay={kdjDay}, preKdjDay={preKdjDay}, preKdjDay1={preKdjDay1}".format(price=cur_price, kdjDay_K=stockData.curKDJDay_K, kdjDay=stockData.curKDJDay, preKdjDay=stockData.preKDJDays[0], preKdjDay1=stockData.preKDJDays[1]))
+        if self.runCount == 1:
+          log.info("shData: price={price}, kdjMonth={kdjMonth}".format(price=shData.kLineDays[0].close, kdjMonth=shData.curKDJMonth))
         # 上证周macd与前一周差值连续7天为正
         if len(self.rooms) < g.MAX_ROOM and shData.curKDJMonth < gParam.SH_STOP_BUY_KDJ_LINE:
             # 席位未满,查找买入机会
@@ -182,10 +186,6 @@ class TradeManager:   # 交易管理
                   log.info("data error,id = {id} curKDJ = {curKDJ}".format(curKDJ = stockData.curKDJMonth, id = stockData.id))
                   continue
 
-                monthDiff1 = stockData.preKDJMonthDiff(1)
-                weekDiff1 = stockData.preKDJWeekDiff(1)
-                dayDiff1 = stockData.preKDJDayDiff(1)
-                dayDiff2 = stockData.preKDJDayDiff(2)
                 # 1. 上市天数大于24个月
                 # 2. 如果kdj D值的月线上升，而且diff月线也上升，判定为可买入
                 # 3. 如果周线上涨，在日线底部反转点买入
@@ -195,7 +195,8 @@ class TradeManager:   # 交易管理
                   # if monthDiff1 > 0 and monthDiff2 < 0 and monthDiff3 < 0 and monthMacdDiff > 0:
                   #   buyReason = 1
                   #   buyMsg = "monthDiff1 > 0 and monthDiff2 < 0 and monthDiff3 < 0 and monthMacdDiff > 0 and weekDiff1 > 0 and weekMacdDiff > 0"
-                  if stockData.curKDJDay < 33.0000 and stockData.curKDJDay > stockData.preKDJDays[0] + 0.5 and stockData.preKDJDays[0] < stockData.preKDJDays[1]:
+                  # log.info("judge price={price}, kdjDay_K={kdjDay_K}, kdjDay={kdjDay}, preKdjDay={preKdjDay}, preKdjDay1={preKdjDay1}".format(price=cur_price, kdjDay_K=stockData.curKDJDay_K, kdjDay=stockData.curKDJDay, preKdjDay=stockData.preKDJDays[0], preKdjDay1=stockData.preKDJDays[1]))
+                  if stockData.curKDJDay < 33.0000 and stockData.curKDJDay > stockData.preKDJDays[0] + 1 and stockData.preKDJDays[0] < stockData.preKDJDays[1]:
                     buyReason = 2
                     buyMsg = "stockData.curKDJDay < 33.0000 and stockData.curKDJDay > stockData.preKDJDays[0] + 0.5 and stockData.preKDJDays[0] < stockData.preKDJDays[1]"
                   if buyReason > 0:
@@ -348,7 +349,7 @@ class TradeRoom:    #交易席位
       sellReason = 0
       sellMsg = ""
       # 反转，判定为卖出
-      if stockData.curKDJDay_K < stockData.preKDJDays_K[0] - 2.50:
+      if stockData.curKDJDay_K < stockData.preKDJDays_K[0] - 3.50:
         sellReason = 1
         sellMsg = "stockData.curKDJDay_K < stockData.preKDJDays_K[0] - 2.50"
       if sellReason > 0:
