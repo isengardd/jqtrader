@@ -49,6 +49,16 @@ class StockData:
   def getPreTradeDay(self):
     return self.kLineDays[0].endTime
 
+  # 获取上一次的波峰
+  def getLastKdjDayCrest(self, min):
+    if len(self.preKDJDays) <= 2:
+      return 0
+    for index in range(1, len(self.preKDJDays) - 1, 1):
+      if self.preKDJDays[index] > min and \
+      self.preKDJDays[index] > self.preKDJDays[index - 1] and \
+      self.preKDJDays[index] > self.preKDJDays[index + 1]:
+        return self.preKDJDays[index]
+    return 0
   def getKdjMonthAvg(self, start, count):
     if count <= 0 or len(self.preKDJMonths) == 0 or start >= len(self.preKDJMonths):
       return 0

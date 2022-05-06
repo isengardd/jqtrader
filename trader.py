@@ -34,7 +34,7 @@ class TraderParam:
     self.KDJ_PARAM3 = 3
     self.KDJ_PRE_MONTH_COUNT = 5 # KDJ月线缓存数
     self.KDJ_PRE_WEEK_COUNT = 5 # KDJ周线缓存数
-    self.KDJ_PRE_DAY_COUNT = 5 # KDJ日线缓存数
+    self.KDJ_PRE_DAY_COUNT = 60 # KDJ日线缓存数
     self.KDJ_MONTH_AVG_COUNT = 40 # KDJ每日月均线缓存数（前X天的月KDJ列表,用于计算平均值）
     self.KDJ_WEEK_AVG_COUNT = 10 # KDJ每日周均线缓存数
     self.MACD_PRE_MONTH_COUNT = 2 # MACD月线缓存数
@@ -196,7 +196,12 @@ class TradeManager:   # 交易管理
                   #   buyReason = 1
                   #   buyMsg = "monthDiff1 > 0 and monthDiff2 < 0 and monthDiff3 < 0 and monthMacdDiff > 0 and weekDiff1 > 0 and weekMacdDiff > 0"
                   # log.info("judge price={price}, kdjDay_K={kdjDay_K}, kdjDay={kdjDay}, preKdjDay={preKdjDay}, preKdjDay1={preKdjDay1}".format(price=cur_price, kdjDay_K=stockData.curKDJDay_K, kdjDay=stockData.curKDJDay, preKdjDay=stockData.preKDJDays[0], preKdjDay1=stockData.preKDJDays[1]))
-                  if stockData.curKDJDay < 33.0000 and stockData.curKDJDay > stockData.preKDJDays[0] + 1 and stockData.preKDJDays[0] < stockData.preKDJDays[1]:
+                  maxKdjValue = 35.0000
+                  kdjDayCrest = stockData.getLastKdjDayCrest(maxKdjValue)
+                  if stockData.curKDJDay < maxKdjValue and stockData.curKDJMonth > stockData.preKDJMonths[0] and \
+                  stockData.curKDJDay > stockData.preKDJDays[0] + 0.5 and \
+                  stockData.preKDJDays[0] < stockData.preKDJDays[1] and \
+                  kdjDayCrest - stockData.curKDJDay >= 30.000:
                     buyReason = 2
                     buyMsg = "stockData.curKDJDay < 33.0000 and stockData.curKDJDay > stockData.preKDJDays[0] + 0.5 and stockData.preKDJDays[0] < stockData.preKDJDays[1]"
                   if buyReason > 0:
@@ -349,7 +354,7 @@ class TradeRoom:    #交易席位
       sellReason = 0
       sellMsg = ""
       # 反转，判定为卖出
-      if stockData.curKDJDay_K < stockData.preKDJDays_K[0] - 3.50:
+      if stockData.curKDJDay_K < stockData.preKDJDays_K[0] - 2.50 or stockData.curKDJDay_K < stockData.preKDJDays_K[1] - 2.50:
         sellReason = 1
         sellMsg = "stockData.curKDJDay_K < stockData.preKDJDays_K[0] - 2.50"
       if sellReason > 0:
