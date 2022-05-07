@@ -72,6 +72,19 @@ class TraderParam:
     ]
 gParam = TraderParam()
 
+def fitBuyCondition(stockData):
+  buyReason = 0
+  buyMsg = ""
+  maxKdjValue = 30.0000
+  kdjDayCrest = stockData.getLastKdjDayCrest(maxKdjValue)
+  if stockData.curKDJDay < maxKdjValue and stockData.curKDJMonth > stockData.preKDJMonths[0] + 0.5 and \
+  stockData.curKDJDay > stockData.preKDJDays[0] + 0.5 and \
+  stockData.preKDJDays[0] < stockData.preKDJDays[1] - 1.0 and \
+  kdjDayCrest - stockData.curKDJDay >= 35.000:
+    buyReason = 2
+    buyMsg = "stockData.curKDJDay < 33.0000 and stockData.curKDJDay > stockData.preKDJDays[0] + 0.5 and stockData.preKDJDays[0] < stockData.preKDJDays[1]"
+  return (buyReason, buyMsg)
+
 class TradeManager:   # 交易管理
     def __init__(self):
         self.rooms = [] #交易席位
@@ -84,6 +97,10 @@ class TradeManager:   # 交易管理
         return len(self.rooms) < g.MAX_ROOM
 
     def run(self, context, data):
+        # 系统的问题，9点30分获取到的还是昨日的收盘价（实际操作时应该也能买卖，但是回溯时不准确），所以代码从9点31分开始
+        if context.current_dt.hour == 9 and context.current_dt.minute == 30:
+          return
+
         recalcKDJ = True
         # if self.runCount == 1:
         #     # 离收盘差5分钟时再执行一次
@@ -196,14 +213,7 @@ class TradeManager:   # 交易管理
                   #   buyReason = 1
                   #   buyMsg = "monthDiff1 > 0 and monthDiff2 < 0 and monthDiff3 < 0 and monthMacdDiff > 0 and weekDiff1 > 0 and weekMacdDiff > 0"
                   # log.info("judge price={price}, kdjDay_K={kdjDay_K}, kdjDay={kdjDay}, preKdjDay={preKdjDay}, preKdjDay1={preKdjDay1}".format(price=cur_price, kdjDay_K=stockData.curKDJDay_K, kdjDay=stockData.curKDJDay, preKdjDay=stockData.preKDJDays[0], preKdjDay1=stockData.preKDJDays[1]))
-                  maxKdjValue = 35.0000
-                  kdjDayCrest = stockData.getLastKdjDayCrest(maxKdjValue)
-                  if stockData.curKDJDay < maxKdjValue and stockData.curKDJMonth > stockData.preKDJMonths[0] and \
-                  stockData.curKDJDay > stockData.preKDJDays[0] + 0.5 and \
-                  stockData.preKDJDays[0] < stockData.preKDJDays[1] and \
-                  kdjDayCrest - stockData.curKDJDay >= 30.000:
-                    buyReason = 2
-                    buyMsg = "stockData.curKDJDay < 33.0000 and stockData.curKDJDay > stockData.preKDJDays[0] + 0.5 and stockData.preKDJDays[0] < stockData.preKDJDays[1]"
+                  (buyReason, buyMsg) = fitBuyCondition(stockData)
                   if buyReason > 0:
                     # 符合买入条件，进入交易席位
                     newRoom = TradeRoom()
@@ -434,6 +444,14 @@ class TradeRoom:    #交易席位
         if self.stockCount == 0:
           log.info("trade in gParam.PROCESS_SELL, stockid={0}  but stockCount is 0".format(self.id))
           self.tradeProcess.changeType(context, gParam.PROCESS_SELL_DONE)
+          return
+
+        # 如果中途又不满足卖出条件
+        stockData = g.stockDatas[self.id]
+        buyReason, _ = fitBuyCondition(stockData)
+        if buyReason > 0:
+          log.info("trade in gParam.PROCESS_SELL, stockid={stockId}, buyReason={buyReason}, return to PROCESS_BUY_DONE".format(stockId = self.id, buyReason=buyReason))
+          self.tradeProcess.changeType(context, gParam.PROCESS_BUY_DONE)
           return
 
         if GetDayTimeStamp(context.current_dt, 0) >= self.tradeProcess.stepEnable:
