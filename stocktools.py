@@ -39,6 +39,9 @@ def GetStockName(stock_id):
   securityInfo = get_security_info(stock_id)
   return securityInfo.display_name
 
+def IsSameDay(d1, d2):
+  return d1.year==d2.year and d1.month==d2.month and d1.day==d2.day
+
 def GetStockStart(stock_id):
   securityInfo = get_security_info(stock_id)
   return securityInfo.start_date #datetime.date

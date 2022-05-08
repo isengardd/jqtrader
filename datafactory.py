@@ -49,6 +49,21 @@ class StockData:
   def getPreTradeDay(self):
     return self.kLineDays[0].endTime
 
+  def getDiffTradeDay(self, start, end):
+    if GetDayTimeStamp(end, 0) < GetDayTimeStamp(start, 0):
+      return 0
+    if IsSameDay(start, end):
+      return 0
+    diffDay = 0
+    for index in range(len(self.kLineDays)):
+      if (IsSameDay(end, self.kLineDays[index].endTime)):
+        for subIdx in range(index + 1, len(self.kLineDays)):
+          diffDay = diffDay + 1
+          if IsSameDay(start, self.kLineDays[subIdx].endTime):
+            break
+        break
+    return diffDay
+
   # 获取x日内最低价及对应最低价日的索引
   def getMinPricePreDays(self, cur_date, day):
     minPrice = 99999

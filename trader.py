@@ -403,20 +403,21 @@ class TradeRoom:    #交易席位
         return False
 
       cur_price = data[self.id].avg
+      curProfit = (cur_price - self.avgCost) / self.avgCost
       sellReason = 0
       sellMsg = ""
+      #log.info("avgCost={avgCost}, curPrice={curPrice},highProfit={highProfit}, curProfit={curProfit}, diffday={diffDay}".format(avgCost=self.avgCost,curPrice=cur_price,highProfit=self.highProfit, curProfit=curProfit,diffDay=stockData.getDiffTradeDay(self.initTime, context.current_dt.date())))
       # 反转，判定为卖出
       if sellReason == 0 and (stockData.curKDJDay_K < stockData.preKDJDays_K[0] - 2.50 or stockData.curKDJDay_K < stockData.preKDJDays_K[1] - 2.50):
         sellReason = 1
         sellMsg = "stockData.curKDJDay_K < stockData.preKDJDays_K[0] - 2.50"
       # 持仓5日仍亏损
-      if sellReason == 0 and (context.current_dt.date() - self.initTime).days >= 4 and (self.avgCost >= cur_price):
+      if sellReason == 0 and stockData.getDiffTradeDay(self.initTime, context.current_dt.date()) >= 4 and (self.avgCost >= cur_price):
         sellReason = 2
         sellMsg = "hold 5 days and curprice={curPrice} lower than holdprice={holdPrice}".format(curPrice=cur_price, holdPrice=self.avgCost)
       # 最高利润达到4%，当前在2%以下
-      if sellReason == 0 and self.highProfit >= 0.05 and self.avgCost > 0:
-        curProfit = (cur_price - self.avgCost) / self.avgCost
-        if curProfit <= self.highProfit / 2:
+      if sellReason == 0 and self.highProfit >= 0.045:
+        if curProfit <= 0.02:
           sellReason = 3
           sellMsg = "highprofit={highProfit}, curProfit={curProfit}".format(highProfit=self.highProfit, curProfit=curProfit)
 
