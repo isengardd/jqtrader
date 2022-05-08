@@ -49,6 +49,18 @@ class StockData:
   def getPreTradeDay(self):
     return self.kLineDays[0].endTime
 
+  # 获取x日内最低价及对应最低价日的索引
+  def getMinPricePreDays(self, cur_date, day):
+    minPrice = 99999
+    minIndex = -1
+    for index in range(len(self.kLineDays)):
+      if (cur_date - self.kLineDays[index].endTime).days > day:
+        break
+      if self.kLineDays[index].low < minPrice:
+        minPrice = self.kLineDays[index].low
+        minIndex = index
+    return minPrice, minIndex
+
   # 获取上一次的波峰
   def getLastKdjDayCrest(self, min):
     if len(self.preKDJDays) <= 2:

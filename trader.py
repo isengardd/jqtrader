@@ -65,24 +65,49 @@ class TraderParam:
     self.securities = [
       # 上证指数也考虑进来
       SH_CODE,
-      '601000'
+      '000895','601000', '601633'
     ] if self.PRODUCT else [
       SH_CODE,
-      '601000'
+      '000895','601000', '601633'
     ]
 gParam = TraderParam()
 
-def fitBuyCondition(stockData):
+def fitBuyCondition(stockData, curDateTime, cur_price):
   buyReason = 0
   buyMsg = ""
   maxKdjValue = 30.0000
-  kdjDayCrest = stockData.getLastKdjDayCrest(maxKdjValue)
+  maxKdjValue2 = 40.0000
+  kdjDayCrest = stockData.getLastKdjDayCrest(20.0000)
   if stockData.curKDJDay < maxKdjValue and stockData.curKDJMonth > stockData.preKDJMonths[0] + 0.5 and \
   stockData.curKDJDay > stockData.preKDJDays[0] + 0.5 and \
   stockData.preKDJDays[0] < stockData.preKDJDays[1] - 1.0 and \
   kdjDayCrest - stockData.curKDJDay >= 35.000:
     buyReason = 2
-    buyMsg = "stockData.curKDJDay < 33.0000 and stockData.curKDJDay > stockData.preKDJDays[0] + 0.5 and stockData.preKDJDays[0] < stockData.preKDJDays[1]"
+    buyMsg = "diffCrest >= 35, stockData.curKDJDay < 30.0000 and stockData.curKDJDay > stockData.preKDJDays[0] + 0.5 and stockData.preKDJDays[0] < stockData.preKDJDays[1] - 1.0"
+    return (buyReason, buyMsg)
+  if stockData.curKDJDay < maxKdjValue and \
+  stockData.curKDJDay > stockData.preKDJDays[0] + 0.5 and \
+  stockData.preKDJDays[0] < stockData.preKDJDays[1] - 0.5 and \
+  kdjDayCrest - stockData.curKDJDay >= 25.000:
+    minPrice, minIndex = stockData.getMinPricePreDays(curDateTime.date(), 180)
+    #log.info("minPrice={minPrice}, minIndex={minIndex}".format(minPrice=minPrice, minIndex=minIndex))
+    if minIndex >= 0 and minIndex < 3:
+      buyReason = 3
+      buyMsg = "minprice={minPrice} in 2weeks, stockData.curKDJDay < 30.0000 and stockData.curKDJDay > stockData.preKDJDays[0] + 0.5 and stockData.preKDJDays[0] < stockData.preKDJDays[1] - 1.0".format(minPrice=minPrice)
+      return (buyReason, buyMsg)
+    elif minIndex >= 0 and math.fabs(cur_price - minPrice) / cur_price <= 0.015:
+      buyReason = 4
+      buyMsg = "minprice={minPrice} closed to curPrice={curPrice}, stockData.curKDJDay < 30.0000 and stockData.curKDJDay > stockData.preKDJDays[0] + 0.5 and stockData.preKDJDays[0] < stockData.preKDJDays[1] - 1.0".format(minPrice=minPrice, curPrice=cur_price)
+      return (buyReason, buyMsg)
+  if stockData.curKDJDay < maxKdjValue2 and \
+  stockData.curKDJDay > stockData.preKDJDays[0] + 1 and \
+  stockData.preKDJDays[0] < stockData.preKDJDays[1] - 1 and \
+  kdjDayCrest - stockData.curKDJDay >= 25.000:
+    minPrice, minIndex = stockData.getMinPricePreDays(curDateTime.date(), 180)
+    if minIndex >= 0 and minIndex < 3:
+      buyReason = 5
+      buyMsg = "minprice={minPrice} in 4days, stockData.curKDJDay < 45.0000 and stockData.curKDJDay > stockData.preKDJDays[0] + 0.5 and stockData.preKDJDays[0] < stockData.preKDJDays[1] - 1.0".format(minPrice=minPrice, curPrice=cur_price)
+      return (buyReason, buyMsg)
   return (buyReason, buyMsg)
 
 class TradeManager:   # 交易管理
@@ -156,6 +181,7 @@ class TradeManager:   # 交易管理
                   elif cur_price < stockData.kLineMonths[0].low:
                     stockData.kLineMonths[0].low = cur_price
                   stockData.kLineMonths[0].close = cur_price
+                  stockData.kLineMonths[0].endTime = context.current_dt.date()
                   (stockData.curKDJMonth_K, stockData.curKDJMonth) = calcKDJ.GetKDJ(stockData.kLineMonths, gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)
                   stockData.curMacdDiffMonth = calcMACD.GetDiff(stockData.kLineMonths)
                 if len(stockData.kLineWeeks) > 0:
@@ -164,6 +190,7 @@ class TradeManager:   # 交易管理
                   elif cur_price < stockData.kLineWeeks[0].low:
                     stockData.kLineWeeks[0].low = cur_price
                   stockData.kLineWeeks[0].close = cur_price
+                  stockData.kLineWeeks[0].endTime = context.current_dt.date()
                   (stockData.curKDJWeek_K, stockData.curKDJWeek) = calcKDJ.GetKDJ(stockData.kLineWeeks, gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)
                   stockData.curMacdDiffWeek = calcMACD.GetDiff(stockData.kLineWeeks)
                 if len(stockData.kLineDays) > 0:
@@ -172,6 +199,7 @@ class TradeManager:   # 交易管理
                   elif cur_price < stockData.kLineDays[0].low:
                     stockData.kLineDays[0].low = cur_price
                   stockData.kLineDays[0].close = cur_price
+                  stockData.kLineDays[0].endTime = context.current_dt.date()
                   (stockData.curKDJDay_K, stockData.curKDJDay) = calcKDJ.GetKDJ(stockData.kLineDays, gParam.KDJ_PARAM1, gParam.KDJ_PARAM2, gParam.KDJ_PARAM3)
                 #if self.runCount == 1 or (context.current_dt.hour == 14 and context.current_dt.minute >= 45):
                 #  log.info("price={price}, kdjDay_K={kdjDay_K}, kdjDay={kdjDay}, preKdjDay={preKdjDay}, preKdjDay1={preKdjDay1}".format(price=cur_price, kdjDay_K=stockData.curKDJDay_K, kdjDay=stockData.curKDJDay, preKdjDay=stockData.preKDJDays[0], preKdjDay1=stockData.preKDJDays[1]))
@@ -213,7 +241,7 @@ class TradeManager:   # 交易管理
                   #   buyReason = 1
                   #   buyMsg = "monthDiff1 > 0 and monthDiff2 < 0 and monthDiff3 < 0 and monthMacdDiff > 0 and weekDiff1 > 0 and weekMacdDiff > 0"
                   # log.info("judge price={price}, kdjDay_K={kdjDay_K}, kdjDay={kdjDay}, preKdjDay={preKdjDay}, preKdjDay1={preKdjDay1}".format(price=cur_price, kdjDay_K=stockData.curKDJDay_K, kdjDay=stockData.curKDJDay, preKdjDay=stockData.preKDJDays[0], preKdjDay1=stockData.preKDJDays[1]))
-                  (buyReason, buyMsg) = fitBuyCondition(stockData)
+                  (buyReason, buyMsg) = fitBuyCondition(stockData, context.current_dt, cur_price)
                   if buyReason > 0:
                     # 符合买入条件，进入交易席位
                     newRoom = TradeRoom()
@@ -263,6 +291,9 @@ class TradeRoom:    #交易席位
         self.cashTotal = float(0.00)
         self.cashLeft = float(0.00)
         self.stockCount = int(0) # 股票数
+        self.avgCost = int(0) # 平均持仓价格
+        self.initTime = None # 首次买入时间 datetime.date
+        self.highProfit = int (0) # 买入后最高收益率
         self.tradeOrder = None
 
     def finished(self):
@@ -295,10 +326,17 @@ class TradeRoom:    #交易席位
         if self.dealYestdayOrder(data):
           return
 
+        # 更新最高收益
+        cur_price = data[self.id].avg
+        if self.avgCost > 0 and cur_price > self.avgCost:
+          curProfit = (cur_price - self.avgCost) / self.avgCost
+          if curProfit > self.highProfit:
+            self.highProfit = curProfit
+
         if self.tradeProcess.tradeType == gParam.PROCESS_BUY:
           self.processBuy(context, data)
         if self.tradeProcess.tradeType == gParam.PROCESS_BUY_DONE:
-          self.processBuyDone(context)
+          self.processBuyDone(context, data)
         if self.tradeProcess.tradeType == gParam.PROCESS_SELL:
           self.processSell(context, data)
 
@@ -333,8 +371,11 @@ class TradeRoom:    #交易席位
         if self.stockCount != position.total_amount:
           self.stockCount = position.total_amount
           log.info("update stockcount, stock_id={0}, stockcount={1}".format(self.id, self.stockCount))
+        self.avgCost = position.avg_cost
+        self.initTime = position.init_time.date()
       else:
         self.stockCount = 0
+        self.avgCost = 0
 
     def monthDecideSell(self, context):
       stockData = g.stockDatas[self.id]
@@ -355,18 +396,30 @@ class TradeRoom:    #交易席位
         return True
       return False
 
-    def dayDecideSell(self, context):
+    def dayDecideSell(self, context, data):
       stockData = g.stockDatas[self.id]
       if stockData.curKDJDay == ERR_DATA:
         log.info("data error,id = {id} curKDJDay = {curKDJDay}".format(curKDJDay=stockData.curKDJDay, id=stockData.id))
         return False
 
+      cur_price = data[self.id].avg
       sellReason = 0
       sellMsg = ""
       # 反转，判定为卖出
-      if stockData.curKDJDay_K < stockData.preKDJDays_K[0] - 2.50 or stockData.curKDJDay_K < stockData.preKDJDays_K[1] - 2.50:
+      if sellReason == 0 and (stockData.curKDJDay_K < stockData.preKDJDays_K[0] - 2.50 or stockData.curKDJDay_K < stockData.preKDJDays_K[1] - 2.50):
         sellReason = 1
         sellMsg = "stockData.curKDJDay_K < stockData.preKDJDays_K[0] - 2.50"
+      # 持仓5日仍亏损
+      if sellReason == 0 and (context.current_dt.date() - self.initTime).days >= 4 and (self.avgCost >= cur_price):
+        sellReason = 2
+        sellMsg = "hold 5 days and curprice={curPrice} lower than holdprice={holdPrice}".format(curPrice=cur_price, holdPrice=self.avgCost)
+      # 最高利润达到4%，当前在2%以下
+      if sellReason == 0 and self.highProfit >= 0.05 and self.avgCost > 0:
+        curProfit = (cur_price - self.avgCost) / self.avgCost
+        if curProfit <= self.highProfit / 2:
+          sellReason = 3
+          sellMsg = "highprofit={highProfit}, curProfit={curProfit}".format(highProfit=self.highProfit, curProfit=curProfit)
+
       if sellReason > 0:
         self.tradeProcess.changeType(context, gParam.PROCESS_SELL)
         log.info("change to sell, stockid={stockid}, preKDJDays_K={preKDJDays_K}, curKDJDay_K={curKDJDay_K}".format(stockid = self.id, preKDJDays_K = stockData.preKDJDays_K[0], curKDJDay_K = stockData.curKDJDay_K))
@@ -427,14 +480,14 @@ class TradeRoom:    #交易席位
         # todo: 根据周线交易
         self.processSubTrade(context, data)
 
-    def processBuyDone(self, context):
+    def processBuyDone(self, context, data):
       self.cashLeft = 0
       self.updateStockCount(context)
       if self.stockCount == 0:
         log.info("trade in gParam.PROCESS_BUY_DONE, stock_id={0} but stockCount is 0".format(self.id))
         self.tradeProcess.changeType(context, gParam.PROCESS_SELL)
         return
-      self.dayDecideSell(context)
+      self.dayDecideSell(context, data)
 
     def processSell(self, context, data):
       # todo: 如果有买单，需要撤销
@@ -447,8 +500,9 @@ class TradeRoom:    #交易席位
           return
 
         # 如果中途又不满足卖出条件
+        cur_price = data[self.id].avg
         stockData = g.stockDatas[self.id]
-        buyReason, _ = fitBuyCondition(stockData)
+        buyReason, _ = fitBuyCondition(stockData, context.current_dt, cur_price)
         if buyReason > 0:
           log.info("trade in gParam.PROCESS_SELL, stockid={stockId}, buyReason={buyReason}, return to PROCESS_BUY_DONE".format(stockId = self.id, buyReason=buyReason))
           self.tradeProcess.changeType(context, gParam.PROCESS_BUY_DONE)
@@ -460,7 +514,6 @@ class TradeRoom:    #交易席位
             self.tradeProcess.changeType(context, gParam.PROCESS_SELL_DONE)
             return
 
-          cur_price = data[self.id].avg
           orderRes = order(self.id, -sell_count)
           if orderRes == None:
             log.info("error, sell order failed: orderRes is none, id={0},price={1},stockCount={2}".format(self.id, cur_price, self.stockCount))
