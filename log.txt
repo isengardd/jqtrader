@@ -40,4 +40,4 @@
  reason=2,rsi = 0.0, pre_macd_diff=-0.989572704573, macd_diff=-0.969821443752, k-4=24.85,k-3=21.54, k-2=19.49, k-1=19.53, kdj = 20.48
 
 2020-04-10 09:00:00 - INFO  - id = 601200.XSHG, number=14,pub=736, pre_open=12.06, pre_close=12.05, k_open=11.53, k_close=12.05, 
- reason=1,rsi = 0.0, pre_macd_diff=-1.07814324707, macd_diff=-0.953526627793, k-4=34.38,k-3=31.25, k-2=29.81, k-1=28.71, kdj = 29.57
+ reason=1,rsi = 0.0, pre_macd_diff=-1.07814324707, macd_diff=-0.953526627793, k-4=34.38,k-3=31.25, k-2=29.81, k-1=28.71, kdj = 29.5766
